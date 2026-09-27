@@ -1,13 +1,1 @@
-# Compilados de Java
-*.class
-
-# Archivos generados por BlueJ
-*.ctxt
-bluej.pkg
-bluej.pkh
-
-
-doc/
-pruebas/
-.vscode/
-bin/
+MECADATA
