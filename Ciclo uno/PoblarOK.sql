@@ -30,10 +30,8 @@ INSERT INTO PRESTA (disponible, precio_local, catalogo_servicio, sede) VALUES
 INSERT INTO SERVICIOS (vehiculo, sede) VALUES
     ('ABC123', 'S01');
 
--- El numero del servicio lo genera el disparador, por eso se consulta en lugar de escribirlo
 INSERT INTO DETALLE_ORDENES (id, valor_cobrado, estado, fecha_inicio, fecha_fin, catalogo_servicio, servicio) VALUES
-    ('DO01', 160000.00, 'F', CURRENT_DATE, CURRENT_DATE, 'CS01',
-     (SELECT MAX(numero) FROM SERVICIOS WHERE vehiculo = 'ABC123'));
+    ('DO01', 160000.00, 'E', CURRENT_DATE, NULL, 'CS01', 'OS26-00000001');
 
 INSERT INTO TRABAJA (horas_trabajadas, tecnico, detalle_orden) VALUES
     (1.5, '2020202020', 'DO01');
@@ -66,11 +64,11 @@ INSERT INTO DETALLE_COMPRAS (id, cantidad, precio_unidad, compra, repuesto) VALU
     ('DC01', 30, 20000.00, 'C01', 'R001');
 
 INSERT INTO MOVIMIENTOS (numero, fecha, valor, descripcion, estado) VALUES
-    ('M01', CURRENT_DATE, 185000.00, 'Cobro orden ' || (SELECT MAX(numero) FROM SERVICIOS WHERE vehiculo = 'ABC123'), 'P'),
+    ('M01', CURRENT_DATE, 185000.00, 'Cobro orden OS26-00000001', 'P'),
     ('M02', '2024-03-25', 600000.00, 'Pago compra C01', 'P');
 
 INSERT INTO COBROS (movimiento, medio_pago, fecha_expedido, orden) VALUES
-    ('M01', 'T', CURRENT_DATE, (SELECT MAX(numero) FROM SERVICIOS WHERE vehiculo = 'ABC123'));
+    ('M01', 'T', CURRENT_DATE, 'OS26-00000001');
 
 INSERT INTO PAGOS (movimiento, fecha_pago, compra) VALUES
     ('M02', '2024-03-25', 'C01');
