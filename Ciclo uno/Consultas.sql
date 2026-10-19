@@ -1,6 +1,4 @@
 -- MecaData Consultas
-
--- Consultas gerenciales
     -- Clientes que mas han gastado en el negocio 
 SELECT  p.cedula,
         p.nombre,
@@ -8,39 +6,38 @@ SELECT  p.cedula,
         COUNT(DISTINCT v.placa) AS numeroVehiculos,
         COUNT(DISTINCT s.numero) AS numeroOrdenes,
         SUM(m.valor) AS totalCobrado
-FROM Cobros c
-JOIN Movimientos m ON m.numero = c.movimiento
-JOIN Servicios s ON s.numero = c.orden
-JOIN Vehiculos v ON v.placa = s.vehiculo
-JOIN Personas p ON p.cedula = v.cliente
+FROM COBROS c
+JOIN MOVIMIENTOS m ON m.numero = c.movimiento
+JOIN SERVICIOS s ON s.numero = c.orden
+JOIN VEHICULOS v ON v.placa = s.vehiculo
+JOIN PERSONAS p ON p.cedula = v.cliente
 WHERE m.estado = 'P' AND m.fecha BETWEEN '2024-01-01' AND '2024-12-31'
 GROUP BY p.cedula, p.nombre, p.apellido
 ORDER BY totalCobrado DESC;
 
 
 
--- Consultas operativas
     -- Servicios en proceso 
 SELECT  s.numero,
         s.vehiculo AS placa,
         p.nombre,
         p.apellido,
-        s.fechaInicio
-FROM Servicios s
-JOIN Vehiculos v ON v.placa = s.vehiculo
-JOIN Personas p ON p.cedula = v.cliente
-JOIN Empleados e ON e.sede = s.sede
+        s.fecha_inicio
+FROM SERVICIOS s
+JOIN VEHICULOS v ON v.placa = s.vehiculo
+JOIN PERSONAS p ON p.cedula = v.cliente
+JOIN EMPLEADOS e ON e.sede = s.sede
 WHERE s.estado = 'E' AND e.cargo = 'G' AND e.persona = '3030303030'
-ORDER BY s.fechaInicio ASC;
+ORDER BY s.fecha_inicio ASC;
 
     -- Saber que servivios presta una sede
 SELECT  cs.codigo,
         cs.nombre,
-        COALESCE(p.precioLocal, cs.precioBase) AS precio,
-        cs.tiempoMedio
-FROM Empleados e
-JOIN Presta p ON p.sede = e.sede
-JOIN CatalogoServicios cs ON cs.codigo = p.catalogoServicio
+        COALESCE(p.precio_local, cs.precio_base) AS precio,
+        cs.tiempo_medio
+FROM EMPLEADOS e
+JOIN PRESTA p ON p.sede = e.sede
+JOIN CATALOGO_SERVICIOS cs ON cs.codigo = p.catalogo_servicio
 WHERE e.persona = '2020202020' AND e.cargo = 'A' AND p.disponible = TRUE
 ORDER BY cs.nombre;
 
@@ -50,24 +47,24 @@ SELECT  r.serie,
         se.numero AS sede,
         se.nombre AS nombreSede,
         i.cantidad
-FROM Inventario i
-JOIN Repuestos r ON r.serie = i.repuesto
-JOIN Sedes se ON se.numero = i.sede
+FROM INVENTARIO i
+JOIN REPUESTOS r ON r.serie = i.repuesto
+JOIN SEDES se ON se.numero = i.sede
 WHERE r.nombre = 'Filtro de aceite'
 ORDER BY i.cantidad ASC;
 
     -- Historial de servicios del técnico
 SELECT  s.numero,
-        d.fechaFin AS fechaCierre,
+        d.fecha_fin AS fechaCierre,
         s.vehiculo AS placa,
         cs.nombre AS servicio,
         d.estado
-FROM Trabaja t
-JOIN DetalleOrdenes d ON d.id = t.detalleOrden
-JOIN Servicios s ON s.numero = d.servicio
-JOIN CatalogoServicios cs ON cs.codigo = d.catalogoServicio
-WHERE t.tecnico = '2020202020' AND d.fechaFin BETWEEN DATE '2024-01-01' AND DATE '2024-12-31'
-ORDER BY d.fechaFin DESC;
+FROM TRABAJA t
+JOIN DETALLE_ORDENES d ON d.id = t.detalle_orden
+JOIN SERVICIOS s ON s.numero = d.servicio
+JOIN CATALOGO_SERVICIOS cs ON cs.codigo = d.catalogo_servicio
+WHERE t.tecnico = '2020202020' AND d.fecha_fin BETWEEN DATE '2024-01-01' AND DATE '2024-12-31'
+ORDER BY d.fecha_fin DESC;
 
     -- Tecnicos sin servicio asignado
 SELECT  p.cedula AS cedulaTecnico, 
@@ -75,13 +72,13 @@ SELECT  p.cedula AS cedulaTecnico,
         p.apellido AS apellidoTecnico, 
         t.especialidad AS especialidadTecnico, 
         p.telefono AS telefonoTecnico
-FROM Tecnicos t 
-JOIN Empleados e ON t.empleado = e.persona
-JOIN Personas p ON e.persona = p.cedula
+FROM TECNICOS t 
+JOIN EMPLEADOS e ON t.empleado = e.persona
+JOIN PERSONAS p ON e.persona = p.cedula
 WHERE t.empleado NOT IN (
     SELECT tra.tecnico
-    FROM Trabaja tra, DetalleOrdenes det
-    WHERE tra.detalleOrden = det.id AND det.estado = 'E'
+    FROM TRABAJA tra, DETALLE_ORDENES det
+    WHERE tra.detalle_orden = det.id AND det.estado = 'E'
 )
 ORDER BY  t.especialidad ASC, p.nombre ASC;
 
@@ -92,36 +89,36 @@ SELECT  s.numero AS numeroSede,
         p.apellido AS apellidoGerente, 
         p.correo AS correoGerente, 
         p.telefono AS telefonoGerente
-FROM Sedes s
-JOIN Empleados e ON e.sede = s.numero
-JOIN Personas p ON p.cedula = e.persona
+FROM SEDES s
+JOIN EMPLEADOS e ON e.sede = s.numero
+JOIN PERSONAS p ON p.cedula = e.persona
 WHERE e.cargo = 'G'
 ORDER BY s.nombre ASC;
 
     -- Consultar estado de un ser
 SELECT  s.numero AS numeroOrden, 
         s.sede AS sede, 
-        det.fechaInicio AS fechaInicio, 
+        det.fecha_inicio AS fechaInicio, 
         cat.nombre AS servicioRealizado, 
         det.estado AS estadoServicio
-FROM Servicios s
-JOIN Vehiculos v ON v.placa = s.vehiculo
-JOIN DetalleOrdenes det ON det.servicio = s.numero
-JOIN CatalogoServicios cat ON cat.codigo = det.catalogoServicio
+FROM SERVICIOS s
+JOIN VEHICULOS v ON v.placa = s.vehiculo
+JOIN DETALLE_ORDENES det ON det.servicio = s.numero
+JOIN CATALOGO_SERVICIOS cat ON cat.codigo = det.catalogo_servicio
 WHERE v.cliente = '1010101010' AND v.placa = 'ABC123' AND s.estado = 'E'
-ORDER BY det.fechaInicio ASC;
+ORDER BY det.fecha_inicio ASC;
 
     -- Consultar las garantias vigentes
 SELECT  g.numero, 
         v.placa, 
         cat.nombre, 
-        g.fechaInicio, 
+        g.fecha_inicio, 
         g.condiciones
-FROM Garantias g, Vehiculos v, CatalogoServicios cat, DetalleOrdenes det, Servicios s
-WHERE g.detalleOrden = det.id 
+FROM GARANTIAS g, VEHICULOS v, CATALOGO_SERVICIOS cat, DETALLE_ORDENES det, SERVICIOS s
+WHERE g.detalle_orden = det.id 
     AND v.placa = s.vehiculo 
-    AND det.catalogoServicio = cat.codigo 
+    AND det.catalogo_servicio = cat.codigo 
     AND det.servicio = s.numero 
     AND v.cliente = '1010101010' 
     AND g.estado = 'V'
-ORDER BY g.fechaInicio DESC;
+ORDER BY g.fecha_inicio DESC;

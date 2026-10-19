@@ -1,12 +1,12 @@
 -- MecaData Tablas
-CREATE TABLE Automoviles(
-    vehiculo TPlaca NOT NULL, 
-    numeroPuertas int NOT NULL
+CREATE TABLE AUTOMOVILES(
+    vehiculo T_PLACA NOT NULL, 
+    numero_puertas INTEGER NOT NULL
 );
 
-CREATE TABLE Vehiculos(
-    placa TPlaca NOT NULL,
-    kilometraje int NOT NULL,
+CREATE TABLE VEHICULOS(
+    placa T_PLACA NOT NULL,
+    kilometraje INTEGER NOT NULL,
     marca VARCHAR(30) NOT NULL,
     modelo NUMERIC(4) NOT NULL,
     cilindraje NUMERIC NOT NULL,
@@ -14,165 +14,163 @@ CREATE TABLE Vehiculos(
     cliente VARCHAR(15) NOT NULL
 );
 
-CREATE TABLE Clientes(
-    direccion VARCHAR(100),
-    fechaRegistro DATE NOT NULL,
+CREATE TABLE CLIENTES(
+    fecha_registro DATE NOT NULL,
     persona VARCHAR(15) NOT NULL
 );
 
-CREATE TABLE Personas(
+CREATE TABLE PERSONAS(
     cedula VARCHAR(15) NOT NULL,
     nombre VARCHAR(50) NOT NULL,
     apellido VARCHAR(50) NOT NULL,
-    correo TCorreo NOT NULL, 
-    telefono TTelefono NOT NULL
+    correo T_CORREO NOT NULL, 
+    telefono T_TELEFONO NOT NULL
 );
 
-CREATE TABLE Empleados(
-    cargo TCargo NOT NULL,
-    fechaIngreso DATE NOT NULL,
-    salario TMoneda NOT NULL,
+CREATE TABLE EMPLEADOS(
+    cargo T_CARGO NOT NULL,
+    fecha_ingreso DATE NOT NULL,
+    salario T_MONEDA NOT NULL,
     persona VARCHAR(15) NOT NULL,
     sede VARCHAR(5) NOT NULL
 );
 
-CREATE TABLE Tecnicos(
+CREATE TABLE TECNICOS(
     especialidad VARCHAR(50) NOT NULL,
     empleado VARCHAR(15) NOT NULL
 );
 
-CREATE TABLE Trabaja(
-    horasTrabajadas NUMERIC NOT NULL,
+CREATE TABLE TRABAJA(
+    horas_trabajadas NUMERIC NOT NULL,
     tecnico VARCHAR(15) NOT NULL,
-    detalleOrden VARCHAR(10) NOT NULL
+    detalle_orden VARCHAR(10) NOT NULL
 );
 
-CREATE TABLE DetalleOrdenes(
+CREATE TABLE DETALLE_ORDENES(
     id VARCHAR(10) NOT NULL,
-    valorCobrado TMoneda,
-    estado TEstadoOrden NOT NULL, 
-    fechaInicio DATE NOT NULL,
-    fechaFin DATE,
-    catalogoServicio VARCHAR(10) NOT NULL,
-    servicio TNumeroOrden NOT NULL
+    valor_cobrado T_MONEDA,
+    estado T_ESTADO_ORDEN NOT NULL, 
+    fecha_inicio DATE NOT NULL,
+    fecha_fin DATE,
+    catalogo_servicio VARCHAR(10) NOT NULL,
+    servicio T_NUMERO_ORDEN NOT NULL
 );
 
-CREATE TABLE Garantias(
+CREATE TABLE GARANTIAS(
     numero VARCHAR(10) NOT NULL,
-    fechaInicio DATE NOT NULL,
+    fecha_inicio DATE NOT NULL,
     condiciones VARCHAR(200) NOT NULL,
-    estado TEstadoGarantia NOT NULL, 
-    detalleOrden VARCHAR(10) NOT NULL 
+    estado T_ESTADO_GARANTIA NOT NULL, 
+    detalle_orden VARCHAR(10) NOT NULL 
 );
 
-CREATE TABLE Servicios(
-    numero TNumeroOrden NOT NULL,
-    fechaInicio DATE NOT NULL,
-    fechaFin DATE,
-    estado TEstadoOrden NOT NULL, 
-    vehiculo TPlaca NOT NULL,
+CREATE TABLE SERVICIOS(
+    numero T_NUMERO_ORDEN NOT NULL,
+    fecha_inicio DATE NOT NULL,
+    fecha_fin DATE,
+    estado T_ESTADO_ORDEN NOT NULL, 
+    vehiculo T_PLACA NOT NULL,
     sede VARCHAR(5) NOT NULL
 );
 
-CREATE TABLE CatalogoServicios(
+CREATE TABLE CATALOGO_SERVICIOS(
     codigo VARCHAR(10) NOT NULL,
     nombre VARCHAR(50) NOT NULL,
     descripcion VARCHAR(200) NOT NULL,
-    precioBase TMoneda NOT NULL,
-    tiempoMedio NUMERIC NOT NULL
+    precio_base T_MONEDA NOT NULL,
+    tiempo_medio NUMERIC NOT NULL
 );
 
-CREATE TABLE Presta(
-    disponible boolean NOT NULL, 
-    precioLocal TMoneda,
-    catalogoServicio VARCHAR(10) NOT NULL,
+CREATE TABLE PRESTA(
+    disponible BOOLEAN NOT NULL, 
+    precio_local T_MONEDA,
+    catalogo_servicio VARCHAR(10) NOT NULL,
     sede VARCHAR(5) NOT NULL
 );
 
-CREATE TABLE Sedes(
+CREATE TABLE SEDES(
     numero VARCHAR(5) NOT NULL, 
     nombre VARCHAR(50) NOT NULL,
     direccion VARCHAR(100) NOT NULL,
-    telefono TTelefono NOT NULL
+    telefono T_TELEFONO NOT NULL
 );
 
-CREATE TABLE Inventario(
-    cantidad int NOT NULL,
+CREATE TABLE INVENTARIO(
+    cantidad INTEGER NOT NULL,
     sede VARCHAR(5) NOT NULL,
     repuesto VARCHAR(20) NOT NULL
 );
 
-CREATE TABLE Repuestos(
+CREATE TABLE REPUESTOS(
     serie VARCHAR(20) NOT NULL,
     tipo VARCHAR(30) NOT NULL, 
     nombre VARCHAR(50) NOT NULL
 );
 
-CREATE TABLE Traslados(
+CREATE TABLE TRASLADOS(
     numero VARCHAR(10) NOT NULL,
-    cantidad int NOT NULL,
+    cantidad INTEGER NOT NULL,
     fecha DATE NOT NULL,
     detalle VARCHAR(200),
-    sedeLlega VARCHAR(5) NOT NULL,
-    sedeSale VARCHAR(5) NOT NULL,
+    sede_llega VARCHAR(5) NOT NULL,
+    sede_sale VARCHAR(5) NOT NULL,
     repuesto VARCHAR(20) NOT NULL
 );
 
-CREATE TABLE ConsumoRepuesto(
-    cantidad int NOT NULL,
-    fechaUso DATE NOT NULL,
-    precio TMoneda NOT NULL,
+CREATE TABLE CONSUMO_REPUESTO(
+    cantidad INTEGER NOT NULL,
+    fecha_uso DATE NOT NULL,
+    precio T_MONEDA NOT NULL,
     repuesto VARCHAR(20) NOT NULL, 
-    detalleOrden VARCHAR(10) NOT NULL
+    detalle_orden VARCHAR(10) NOT NULL
 );
 
-CREATE TABLE Suministra(
-    precioReferencia TMoneda NOT NULL,
+CREATE TABLE SUMINISTRA(
+    precio_referencia T_MONEDA NOT NULL,
     proveedor VARCHAR(15) NOT NULL,
     repuesto VARCHAR(20) NOT NULL
 );
 
-CREATE TABLE Proveedores(
+CREATE TABLE PROVEEDORES(
     nit VARCHAR(15) NOT NULL,
-    correo TCorreo NOT NULL,
-    numeroContacto TTelefono NOT NULL,
+    correo T_CORREO NOT NULL,
+    numero_contacto T_TELEFONO NOT NULL,
     representante VARCHAR(100) NOT NULL,
-    nombre VARCHAR(100) NOT NULL,
-    direccion VARCHAR(100)
+    nombre VARCHAR(100) NOT NULL
 );
 
-CREATE TABLE Compras(
+CREATE TABLE COMPRAS(
     numero VARCHAR(10) NOT NULL,
     fecha DATE NOT NULL,
     sede VARCHAR(5) NOT NULL,
     proveedor VARCHAR(15) NOT NULL
 );
 
-CREATE TABLE DetalleCompras(
+CREATE TABLE DETALLE_COMPRAS(
     id VARCHAR(10) NOT NULL,
-    cantidad int NOT NULL,
-    precioUnidad TMoneda NOT NULL,
+    cantidad INTEGER NOT NULL,
+    precio_unidad T_MONEDA NOT NULL,
     compra VARCHAR(10) NOT NULL,
     repuesto VARCHAR(20) NOT NULL
 );
 
-CREATE TABLE Movimientos(
+CREATE TABLE MOVIMIENTOS(
     numero VARCHAR(10) NOT NULL,
     fecha DATE NOT NULL,
-    valor TMoneda NOT NULL,
+    valor T_MONEDA NOT NULL,
     descripcion VARCHAR(200) NOT NULL,
-    estado TEstadoMovimiento NOT NULL
+    estado T_ESTADO_MOVIMIENTO NOT NULL
 );
 
-CREATE TABLE Cobros(
+CREATE TABLE COBROS(
     movimiento VARCHAR(10) NOT NULL,
-    medioPago TMedioPago NOT NULL,
-    fechaExpedido DATE NOT NULL,
-    orden TNumeroOrden NOT NULL
+    medio_pago T_MEDIO_PAGO NOT NULL,
+    fecha_expedido DATE NOT NULL,
+    orden T_NUMERO_ORDEN NOT NULL
 );
 
-CREATE TABLE Pagos(
+CREATE TABLE PAGOS(
     movimiento VARCHAR(10) NOT NULL,
-    fechaPago DATE NOT NULL,
+    fecha_pago DATE NOT NULL,
     compra VARCHAR(10) NOT NULL
 );
