@@ -1,43 +1,44 @@
 --Dominios
-CREATE DOMAIN TPlaca AS VARCHAR(6)
+CREATE DOMAIN T_PLACA AS VARCHAR(6)
     CHECK (VALUE ~ '^[A-Z]{3}[0-9]{3}$');
 
-CREATE DOMAIN TCorreo AS VARCHAR(50)
+CREATE DOMAIN T_CORREO AS VARCHAR(50)
     CHECK (VALUE LIKE ('%@%.%'));
 
-CREATE DOMAIN TTelefono AS VARCHAR(15)
+CREATE DOMAIN T_TELEFONO AS VARCHAR(15)
     CHECK (VALUE ~ '^[0-9]{7,15}$');
 
-CREATE DOMAIN TCargo AS CHAR(1)
+CREATE DOMAIN T_CARGO AS CHAR(1)
     CHECK (VALUE IN ('G','I','T','A'));
 
-CREATE DOMAIN TEstadoOrden AS CHAR(1)
+CREATE DOMAIN T_ESTADO_ORDEN AS CHAR(1)
     CHECK (VALUE IN ('F','E','C'));
 
-CREATE DOMAIN TEstadoGarantia AS CHAR(1)
+CREATE DOMAIN T_ESTADO_GARANTIA AS CHAR(1)
     CHECK (VALUE IN ('R','X','A','V'));
 
-CREATE DOMAIN TEstadoMovimiento AS CHAR(1)
+CREATE DOMAIN T_ESTADO_MOVIMIENTO AS CHAR(1)
     CHECK (VALUE IN ('P', 'X'));
 
-CREATE DOMAIN TMedioPago AS CHAR(1)
+CREATE DOMAIN T_MEDIO_PAGO AS CHAR(1)
     CHECK (VALUE IN ('E','B','C','T'));
 
-CREATE DOMAIN TMoneda AS NUMERIC(20,2)
+CREATE DOMAIN T_MONEDA AS NUMERIC(20,2)
     CHECK (VALUE >= 0);
 
-CREATE DOMAIN TNumeroOrden AS VARCHAR(13)
+CREATE DOMAIN T_NUMERO_ORDEN AS VARCHAR(13)
     CHECK (VALUE ~ '^OS[0-9]{2}-[0-9]{8}$');
 
+
 --Tablas
-CREATE TABLE Automoviles(
-    vehiculo TPlaca NOT NULL, 
-    numeroPuertas int NOT NULL
+CREATE TABLE AUTOMOVILES(
+    vehiculo T_PLACA NOT NULL, 
+    numero_puertas INTEGER NOT NULL
 );
 
-CREATE TABLE Vehiculos(
-    placa TPlaca NOT NULL,
-    kilometraje int NOT NULL,
+CREATE TABLE VEHICULOS(
+    placa T_PLACA NOT NULL,
+    kilometraje INTEGER NOT NULL,
     marca VARCHAR(30) NOT NULL,
     modelo NUMERIC(4) NOT NULL,
     cilindraje NUMERIC NOT NULL,
@@ -45,428 +46,447 @@ CREATE TABLE Vehiculos(
     cliente VARCHAR(15) NOT NULL
 );
 
-CREATE TABLE Clientes(
-    direccion VARCHAR(100),
-    fechaRegistro DATE NOT NULL,
+CREATE TABLE CLIENTES(
+    fecha_registro DATE NOT NULL,
     persona VARCHAR(15) NOT NULL
 );
 
-CREATE TABLE Personas(
+CREATE TABLE PERSONAS(
     cedula VARCHAR(15) NOT NULL,
     nombre VARCHAR(50) NOT NULL,
     apellido VARCHAR(50) NOT NULL,
-    correo TCorreo NOT NULL, 
-    telefono TTelefono NOT NULL
+    correo T_CORREO NOT NULL, 
+    telefono T_TELEFONO NOT NULL
 );
 
-CREATE TABLE Empleados(
-    cargo TCargo NOT NULL,
-    fechaIngreso DATE NOT NULL,
-    salario TMoneda NOT NULL,
+CREATE TABLE EMPLEADOS(
+    cargo T_CARGO NOT NULL,
+    fecha_ingreso DATE NOT NULL,
+    salario T_MONEDA NOT NULL,
     persona VARCHAR(15) NOT NULL,
     sede VARCHAR(5) NOT NULL
 );
 
-CREATE TABLE Tecnicos(
+CREATE TABLE TECNICOS(
     especialidad VARCHAR(50) NOT NULL,
     empleado VARCHAR(15) NOT NULL
 );
 
-CREATE TABLE Trabaja(
-    horasTrabajadas NUMERIC NOT NULL,
+CREATE TABLE TRABAJA(
+    horas_trabajadas NUMERIC NOT NULL,
     tecnico VARCHAR(15) NOT NULL,
-    detalleOrden VARCHAR(10) NOT NULL
+    detalle_orden VARCHAR(10) NOT NULL
 );
 
-CREATE TABLE DetalleOrdenes(
+CREATE TABLE DETALLE_ORDENES(
     id VARCHAR(10) NOT NULL,
-    valorCobrado TMoneda,
-    estado TEstadoOrden NOT NULL, 
-    fechaInicio DATE NOT NULL,
-    fechaFin DATE,
-    catalogoServicio VARCHAR(10) NOT NULL,
-    servicio TNumeroOrden NOT NULL
+    valor_cobrado T_MONEDA,
+    estado T_ESTADO_ORDEN NOT NULL, 
+    fecha_inicio DATE NOT NULL,
+    fecha_fin DATE,
+    catalogo_servicio VARCHAR(10) NOT NULL,
+    servicio T_NUMERO_ORDEN NOT NULL
 );
 
-CREATE TABLE Garantias(
+CREATE TABLE GARANTIAS(
     numero VARCHAR(10) NOT NULL,
-    fechaInicio DATE NOT NULL,
+    fecha_inicio DATE NOT NULL,
     condiciones VARCHAR(200) NOT NULL,
-    estado TEstadoGarantia NOT NULL, 
-    detalleOrden VARCHAR(10) NOT NULL 
+    estado T_ESTADO_GARANTIA NOT NULL, 
+    detalle_orden VARCHAR(10) NOT NULL 
 );
 
-CREATE TABLE Servicios(
-    numero TNumeroOrden NOT NULL,
-    fechaInicio DATE NOT NULL,
-    fechaFin DATE,
-    estado TEstadoOrden NOT NULL, 
-    vehiculo TPlaca NOT NULL,
+CREATE TABLE SERVICIOS(
+    numero T_NUMERO_ORDEN NOT NULL,
+    fecha_inicio DATE NOT NULL,
+    fecha_fin DATE,
+    estado T_ESTADO_ORDEN NOT NULL, 
+    vehiculo T_PLACA NOT NULL,
     sede VARCHAR(5) NOT NULL
 );
 
-CREATE TABLE CatalogoServicios(
+CREATE TABLE CATALOGO_SERVICIOS(
     codigo VARCHAR(10) NOT NULL,
     nombre VARCHAR(50) NOT NULL,
     descripcion VARCHAR(200) NOT NULL,
-    precioBase TMoneda NOT NULL,
-    tiempoMedio NUMERIC NOT NULL
+    precio_base T_MONEDA NOT NULL,
+    tiempo_medio NUMERIC NOT NULL
 );
 
-CREATE TABLE Presta(
-    disponible boolean NOT NULL, 
-    precioLocal TMoneda,
-    catalogoServicio VARCHAR(10) NOT NULL,
+CREATE TABLE PRESTA(
+    disponible BOOLEAN NOT NULL, 
+    precio_local T_MONEDA,
+    catalogo_servicio VARCHAR(10) NOT NULL,
     sede VARCHAR(5) NOT NULL
 );
 
-CREATE TABLE Sedes(
+CREATE TABLE SEDES(
     numero VARCHAR(5) NOT NULL, 
     nombre VARCHAR(50) NOT NULL,
     direccion VARCHAR(100) NOT NULL,
-    telefono TTelefono NOT NULL
+    telefono T_TELEFONO NOT NULL
 );
 
-CREATE TABLE Inventario(
-    cantidad int NOT NULL,
+CREATE TABLE INVENTARIO(
+    cantidad INTEGER NOT NULL,
     sede VARCHAR(5) NOT NULL,
     repuesto VARCHAR(20) NOT NULL
 );
 
-CREATE TABLE Repuestos(
+CREATE TABLE REPUESTOS(
     serie VARCHAR(20) NOT NULL,
     tipo VARCHAR(30) NOT NULL, 
     nombre VARCHAR(50) NOT NULL
 );
 
-CREATE TABLE Traslados(
+CREATE TABLE TRASLADOS(
     numero VARCHAR(10) NOT NULL,
-    cantidad int NOT NULL,
+    cantidad INTEGER NOT NULL,
     fecha DATE NOT NULL,
     detalle VARCHAR(200),
-    sedeLlega VARCHAR(5) NOT NULL,
-    sedeSale VARCHAR(5) NOT NULL,
+    sede_llega VARCHAR(5) NOT NULL,
+    sede_sale VARCHAR(5) NOT NULL,
     repuesto VARCHAR(20) NOT NULL
 );
 
-CREATE TABLE ConsumoRepuesto(
-    cantidad int NOT NULL,
-    fechaUso DATE NOT NULL,
-    precio TMoneda NOT NULL,
+CREATE TABLE CONSUMO_REPUESTO(
+    cantidad INTEGER NOT NULL,
+    fecha_uso DATE NOT NULL,
+    precio T_MONEDA NOT NULL,
     repuesto VARCHAR(20) NOT NULL, 
-    detalleOrden VARCHAR(10) NOT NULL
+    detalle_orden VARCHAR(10) NOT NULL
 );
 
-CREATE TABLE Suministra(
-    precioReferencia TMoneda NOT NULL,
+CREATE TABLE SUMINISTRA(
+    precio_referencia T_MONEDA NOT NULL,
     proveedor VARCHAR(15) NOT NULL,
     repuesto VARCHAR(20) NOT NULL
 );
 
-CREATE TABLE Proveedores(
+CREATE TABLE PROVEEDORES(
     nit VARCHAR(15) NOT NULL,
-    correo TCorreo NOT NULL,
-    numeroContacto TTelefono NOT NULL,
+    correo T_CORREO NOT NULL,
+    numero_contacto T_TELEFONO NOT NULL,
     representante VARCHAR(100) NOT NULL,
-    nombre VARCHAR(100) NOT NULL,
-    direccion VARCHAR(100)
+    nombre VARCHAR(100) NOT NULL
 );
 
-CREATE TABLE Compras(
+CREATE TABLE COMPRAS(
     numero VARCHAR(10) NOT NULL,
     fecha DATE NOT NULL,
     sede VARCHAR(5) NOT NULL,
     proveedor VARCHAR(15) NOT NULL
 );
 
-CREATE TABLE DetalleCompras(
+CREATE TABLE DETALLE_COMPRAS(
     id VARCHAR(10) NOT NULL,
-    cantidad int NOT NULL,
-    precioUnidad TMoneda NOT NULL,
+    cantidad INTEGER NOT NULL,
+    precio_unidad T_MONEDA NOT NULL,
     compra VARCHAR(10) NOT NULL,
     repuesto VARCHAR(20) NOT NULL
 );
 
-CREATE TABLE Movimientos(
+CREATE TABLE MOVIMIENTOS(
     numero VARCHAR(10) NOT NULL,
     fecha DATE NOT NULL,
-    valor TMoneda NOT NULL,
+    valor T_MONEDA NOT NULL,
     descripcion VARCHAR(200) NOT NULL,
-    estado TEstadoMovimiento NOT NULL
+    estado T_ESTADO_MOVIMIENTO NOT NULL
 );
 
-CREATE TABLE Cobros(
+CREATE TABLE COBROS(
     movimiento VARCHAR(10) NOT NULL,
-    medioPago TMedioPago NOT NULL,
-    fechaExpedido DATE NOT NULL,
-    orden TNumeroOrden NOT NULL
+    medio_pago T_MEDIO_PAGO NOT NULL,
+    fecha_expedido DATE NOT NULL,
+    orden T_NUMERO_ORDEN NOT NULL
 );
 
-CREATE TABLE Pagos(
+CREATE TABLE PAGOS(
     movimiento VARCHAR(10) NOT NULL,
-    fechaPago DATE NOT NULL,
+    fecha_pago DATE NOT NULL,
     compra VARCHAR(10) NOT NULL
 );
 
 --Atributos
-ALTER TABLE Vehiculos ADD CONSTRAINT CK_VEHICULOS_KILOMETRAJE
+ALTER TABLE VEHICULOS ADD CONSTRAINT CK_VEHICULOS_KILOMETRAJE
     CHECK (kilometraje >= 0);
 
-ALTER TABLE Vehiculos ADD CONSTRAINT CK_VEHICULOS_CILINDRAJE
+ALTER TABLE VEHICULOS ADD CONSTRAINT CK_VEHICULOS_CILINDRAJE
     CHECK (cilindraje > 0);
 
-ALTER TABLE Empleados ADD CONSTRAINT CK_EMPLEADOS_SALARIO
+ALTER TABLE EMPLEADOS ADD CONSTRAINT CK_EMPLEADOS_SALARIO
     CHECK (salario > 0);
 
-ALTER TABLE CatalogoServicios ADD CONSTRAINT CK_CATALOGO_SERVICIOS_PRECIO_BASE
-    CHECK (precioBase > 0);
+ALTER TABLE CATALOGO_SERVICIOS ADD CONSTRAINT CK_CATALOGO_SERVICIOS_PRECIO_BASE
+    CHECK (precio_base > 0);
 
-ALTER TABLE CatalogoServicios ADD CONSTRAINT CK_CATALOGO_SERVICIOS_TIEMPO_MEDIO
-    CHECK (tiempoMedio > 0);
+ALTER TABLE CATALOGO_SERVICIOS ADD CONSTRAINT CK_CATALOGO_SERVICIOS_TIEMPO_MEDIO
+    CHECK (tiempo_medio > 0);
 
-ALTER TABLE Presta ADD CONSTRAINT CK_PRESTA_PRECIO_LOCAL
-    CHECK (precioLocal > 0);
+ALTER TABLE PRESTA ADD CONSTRAINT CK_PRESTA_PRECIO_LOCAL
+    CHECK (precio_local > 0);
 
-ALTER TABLE Trabaja ADD CONSTRAINT CK_TRABAJA_HORAS_TRABAJADAS
-    CHECK (horasTrabajadas > 0);
+ALTER TABLE TRABAJA ADD CONSTRAINT CK_TRABAJA_HORAS_TRABAJADAS
+    CHECK (horas_trabajadas > 0);
 
-ALTER TABLE Inventario ADD CONSTRAINT CK_INVENTARIO_CANTIDAD
+ALTER TABLE INVENTARIO ADD CONSTRAINT CK_INVENTARIO_CANTIDAD
     CHECK (cantidad >= 0);
 
-ALTER TABLE Traslados ADD CONSTRAINT CK_TRASLADOS_CANTIDAD
+ALTER TABLE TRASLADOS ADD CONSTRAINT CK_TRASLADOS_CANTIDAD
     CHECK (cantidad > 0);
 
-ALTER TABLE ConsumoRepuesto ADD CONSTRAINT CK_CONSUMO_REPUESTO_CANTIDAD
+ALTER TABLE CONSUMO_REPUESTO ADD CONSTRAINT CK_CONSUMO_REPUESTO_CANTIDAD
     CHECK (cantidad > 0);
 
-ALTER TABLE DetalleCompras ADD CONSTRAINT CK_DETALLE_COMPRAS_CANTIDAD
+ALTER TABLE DETALLE_COMPRAS ADD CONSTRAINT CK_DETALLE_COMPRAS_CANTIDAD
     CHECK (cantidad > 0);
 
 --Primarias
-ALTER TABLE Automoviles ADD CONSTRAINT PK_AUTOMOVILES
+ALTER TABLE AUTOMOVILES ADD CONSTRAINT PK_AUTOMOVILES
     PRIMARY KEY (vehiculo);
 
-ALTER TABLE Vehiculos ADD CONSTRAINT PK_VEHICULOS
+ALTER TABLE VEHICULOS ADD CONSTRAINT PK_VEHICULOS
     PRIMARY KEY (placa);
 
-ALTER TABLE Clientes ADD CONSTRAINT PK_CLIENTES
+ALTER TABLE CLIENTES ADD CONSTRAINT PK_CLIENTES
     PRIMARY KEY (persona);
 
-ALTER TABLE Personas ADD CONSTRAINT PK_PERSONAS
+ALTER TABLE PERSONAS ADD CONSTRAINT PK_PERSONAS
     PRIMARY KEY (cedula);  
 
-ALTER TABLE Empleados ADD CONSTRAINT PK_EMPLEADOS
+ALTER TABLE EMPLEADOS ADD CONSTRAINT PK_EMPLEADOS
     PRIMARY KEY (persona);
 
-ALTER TABLE Tecnicos ADD CONSTRAINT PK_TECNICOS
+ALTER TABLE TECNICOS ADD CONSTRAINT PK_TECNICOS
     PRIMARY KEY (empleado);
 
-ALTER TABLE Trabaja ADD CONSTRAINT PK_TRABAJA
-    PRIMARY KEY (tecnico, detalleOrden);
+ALTER TABLE TRABAJA ADD CONSTRAINT PK_TRABAJA
+    PRIMARY KEY (tecnico, detalle_orden);
 
-ALTER TABLE DetalleOrdenes ADD CONSTRAINT PK_DETALLE_ORDENES
+ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT PK_DETALLE_ORDENES
     PRIMARY KEY (id);  
 
-ALTER TABLE Garantias ADD CONSTRAINT PK_GARANTIAS
+ALTER TABLE GARANTIAS ADD CONSTRAINT PK_GARANTIAS
     PRIMARY KEY (numero);
 
-ALTER TABLE Servicios ADD CONSTRAINT PK_SERVICIOS
+ALTER TABLE SERVICIOS ADD CONSTRAINT PK_SERVICIOS
     PRIMARY KEY (numero);
 
-ALTER TABLE CatalogoServicios ADD CONSTRAINT PK_CATALOGO_SERVICIOS
+ALTER TABLE CATALOGO_SERVICIOS ADD CONSTRAINT PK_CATALOGO_SERVICIOS
     PRIMARY KEY (codigo);
 
-ALTER TABLE Presta ADD CONSTRAINT PK_PRESTA
-    PRIMARY KEY (catalogoServicio, sede);
+ALTER TABLE PRESTA ADD CONSTRAINT PK_PRESTA
+    PRIMARY KEY (catalogo_servicio, sede);
 
-ALTER TABLE Sedes ADD CONSTRAINT PK_SEDES
+ALTER TABLE SEDES ADD CONSTRAINT PK_SEDES
     PRIMARY KEY (numero);
 
-ALTER TABLE Inventario ADD CONSTRAINT PK_INVENTARIO
+ALTER TABLE INVENTARIO ADD CONSTRAINT PK_INVENTARIO
     PRIMARY KEY (sede, repuesto);
 
-ALTER TABLE Repuestos ADD CONSTRAINT PK_REPUESTOS
+ALTER TABLE REPUESTOS ADD CONSTRAINT PK_REPUESTOS
     PRIMARY KEY (serie);
 
-ALTER TABLE Traslados ADD CONSTRAINT PK_TRASLADOS
+ALTER TABLE TRASLADOS ADD CONSTRAINT PK_TRASLADOS
     PRIMARY KEY (numero);
 
-ALTER TABLE ConsumoRepuesto ADD CONSTRAINT PK_CONSUMO_REPUESTO
-    PRIMARY KEY (repuesto, detalleOrden);
+ALTER TABLE CONSUMO_REPUESTO ADD CONSTRAINT PK_CONSUMO_REPUESTO
+    PRIMARY KEY (repuesto, detalle_orden);
 
-ALTER TABLE Suministra ADD CONSTRAINT PK_SUMINISTRA
+ALTER TABLE SUMINISTRA ADD CONSTRAINT PK_SUMINISTRA
     PRIMARY KEY (proveedor, repuesto);
 
-ALTER TABLE Proveedores ADD CONSTRAINT PK_PROVEEDORES
+ALTER TABLE PROVEEDORES ADD CONSTRAINT PK_PROVEEDORES
     PRIMARY KEY (nit);
 
-ALTER TABLE Compras ADD CONSTRAINT PK_COMPRAS
+ALTER TABLE COMPRAS ADD CONSTRAINT PK_COMPRAS
     PRIMARY KEY (numero);
 
-ALTER TABLE DetalleCompras ADD CONSTRAINT PK_DETALLE_COMPRAS
+ALTER TABLE DETALLE_COMPRAS ADD CONSTRAINT PK_DETALLE_COMPRAS
     PRIMARY KEY (id);
 
-ALTER TABLE Movimientos ADD CONSTRAINT PK_MOVIMIENTOS
+ALTER TABLE MOVIMIENTOS ADD CONSTRAINT PK_MOVIMIENTOS
     PRIMARY KEY (numero);
 
-ALTER TABLE Cobros ADD CONSTRAINT PK_COBROS
+ALTER TABLE COBROS ADD CONSTRAINT PK_COBROS
     PRIMARY KEY (movimiento);
 
-ALTER TABLE Pagos ADD CONSTRAINT PK_PAGOS
+ALTER TABLE PAGOS ADD CONSTRAINT PK_PAGOS
     PRIMARY KEY (movimiento);
 
 
 --Unicas
-ALTER TABLE Personas ADD CONSTRAINT UK_PERSONAS_CORREO
+ALTER TABLE PERSONAS ADD CONSTRAINT UK_PERSONAS_CORREO
     UNIQUE (correo);
 
-ALTER TABLE Garantias ADD CONSTRAINT UK_GARANTIAS_DETALLE_ORDEN
-    UNIQUE (detalleOrden);
+ALTER TABLE GARANTIAS ADD CONSTRAINT UK_GARANTIAS_DETALLE_ORDEN
+    UNIQUE (detalle_orden);
 
-ALTER TABLE Sedes ADD CONSTRAINT UK_SEDES_TELEFONO
+ALTER TABLE SEDES ADD CONSTRAINT UK_SEDES_TELEFONO
     UNIQUE (telefono);
 
-ALTER TABLE Proveedores ADD CONSTRAINT UK_PROVEEDORES_CORREO
+ALTER TABLE PROVEEDORES ADD CONSTRAINT UK_PROVEEDORES_CORREO
     UNIQUE (correo);
 
-ALTER TABLE Proveedores ADD CONSTRAINT UK_PROVEEDORES_NUMERO_CONTACTO
-    UNIQUE (numeroContacto);
+ALTER TABLE PROVEEDORES ADD CONSTRAINT UK_PROVEEDORES_NUMERO_CONTACTO
+    UNIQUE (numero_contacto);
 
-ALTER TABLE Cobros ADD CONSTRAINT UK_COBROS_ORDEN
+ALTER TABLE COBROS ADD CONSTRAINT UK_COBROS_ORDEN
     UNIQUE (orden);
 
-ALTER TABLE Pagos ADD CONSTRAINT UK_PAGOS_COMPRA
+ALTER TABLE PAGOS ADD CONSTRAINT UK_PAGOS_COMPRA
     UNIQUE (compra);
 
 
 --Foraneas
-ALTER TABLE Automoviles ADD CONSTRAINT FK_AUTOMOVILES_VEHICULO
-    FOREIGN KEY (vehiculo) REFERENCES Vehiculos(placa)
+
+ALTER TABLE CLIENTES ADD CONSTRAINT FK_CLIENTES_PERSONA
+    FOREIGN KEY (persona) REFERENCES PERSONAS(cedula)
     ON DELETE CASCADE;
 
-ALTER TABLE Vehiculos ADD CONSTRAINT FK_VEHICULOS_CLIENTE
-    FOREIGN KEY (cliente) REFERENCES Clientes(persona)
-    ON DELETE RESTRICT;
-
-ALTER TABLE Clientes ADD CONSTRAINT FK_CLIENTES_PERSONA
-    FOREIGN KEY (persona) REFERENCES Personas(cedula)
+ALTER TABLE EMPLEADOS ADD CONSTRAINT FK_EMPLEADOS_PERSONA
+    FOREIGN KEY (persona) REFERENCES PERSONAS(cedula)
     ON DELETE CASCADE;
 
-ALTER TABLE Empleados ADD CONSTRAINT FK_EMPLEADOS_PERSONA
-    FOREIGN KEY (persona) REFERENCES Personas(cedula)
+ALTER TABLE EMPLEADOS ADD CONSTRAINT FK_EMPLEADOS_SEDE
+    FOREIGN KEY (sede) REFERENCES SEDES(numero)
+    ON DELETE RESTRICT;
+
+ALTER TABLE TECNICOS ADD CONSTRAINT FK_TECNICOS_EMPLEADO
+    FOREIGN KEY (empleado) REFERENCES EMPLEADOS(persona)
     ON DELETE CASCADE;
 
-ALTER TABLE Empleados ADD CONSTRAINT FK_EMPLEADOS_SEDE
-    FOREIGN KEY (sede) REFERENCES Sedes(numero)
+ALTER TABLE TRABAJA ADD CONSTRAINT FK_TRABAJA_TECNICO
+    FOREIGN KEY (tecnico) REFERENCES TECNICOS(empleado)
     ON DELETE RESTRICT;
 
-ALTER TABLE Tecnicos ADD CONSTRAINT FK_TECNICOS_EMPLEADO
-    FOREIGN KEY (empleado) REFERENCES Empleados(persona)
+ALTER TABLE TRABAJA ADD CONSTRAINT FK_TRABAJA_DETALLE_ORDEN
+    FOREIGN KEY (detalle_orden) REFERENCES DETALLE_ORDENES(id)
     ON DELETE CASCADE;
 
-ALTER TABLE Trabaja ADD CONSTRAINT FK_TRABAJA_TECNICO
-    FOREIGN KEY (tecnico) REFERENCES Tecnicos(empleado)
-    ON DELETE RESTRICT;
-
-ALTER TABLE Trabaja ADD CONSTRAINT FK_TRABAJA_DETALLE_ORDEN
-    FOREIGN KEY (detalleOrden) REFERENCES DetalleOrdenes(id)
+ALTER TABLE AUTOMOVILES ADD CONSTRAINT FK_AUTOMOVILES_VEHICULO
+    FOREIGN KEY (vehiculo) REFERENCES VEHICULOS(placa)
     ON DELETE CASCADE;
 
-ALTER TABLE DetalleOrdenes ADD CONSTRAINT FK_DETALLE_ORDENES_CATALOGO_SERVICIO
-    FOREIGN KEY (catalogoServicio) REFERENCES CatalogoServicios(codigo)
+ALTER TABLE VEHICULOS ADD CONSTRAINT FK_VEHICULOS_CLIENTE
+    FOREIGN KEY (cliente) REFERENCES CLIENTES(persona)
     ON DELETE RESTRICT;
 
-ALTER TABLE DetalleOrdenes ADD CONSTRAINT FK_DETALLE_ORDENES_SERVICIO
-    FOREIGN KEY (servicio) REFERENCES Servicios(numero)
+ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT FK_DETALLE_ORDENES_CATALOGO_SERVICIO
+    FOREIGN KEY (catalogo_servicio) REFERENCES CATALOGO_SERVICIOS(codigo)
+    ON DELETE RESTRICT;
+
+ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT FK_DETALLE_ORDENES_SERVICIO
+    FOREIGN KEY (servicio) REFERENCES SERVICIOS(numero)
     ON DELETE CASCADE;
 
-ALTER TABLE Garantias ADD CONSTRAINT FK_GARANTIAS_DETALLE_ORDEN
-    FOREIGN KEY (detalleOrden) REFERENCES DetalleOrdenes(id)
+ALTER TABLE GARANTIAS ADD CONSTRAINT FK_GARANTIAS_DETALLE_ORDEN
+    FOREIGN KEY (detalle_orden) REFERENCES DETALLE_ORDENES(id)
     ON DELETE RESTRICT;
 
-ALTER TABLE Servicios ADD CONSTRAINT FK_SERVICIOS_VEHICULO
-    FOREIGN KEY (vehiculo) REFERENCES Vehiculos(placa)
+ALTER TABLE SERVICIOS ADD CONSTRAINT FK_SERVICIOS_VEHICULO
+    FOREIGN KEY (vehiculo) REFERENCES VEHICULOS(placa)
     ON DELETE RESTRICT;
 
-ALTER TABLE Servicios ADD CONSTRAINT FK_SERVICIOS_SEDE
-    FOREIGN KEY (sede) REFERENCES Sedes(numero)
+ALTER TABLE SERVICIOS ADD CONSTRAINT FK_SERVICIOS_SEDE
+    FOREIGN KEY (sede) REFERENCES SEDES(numero)
     ON DELETE RESTRICT;
 
-ALTER TABLE Presta ADD CONSTRAINT FK_PRESTA_CATALOGO_SERVICIO
-    FOREIGN KEY (catalogoServicio) REFERENCES CatalogoServicios(codigo)
+ALTER TABLE PRESTA ADD CONSTRAINT FK_PRESTA_CATALOGO_SERVICIO
+    FOREIGN KEY (catalogo_servicio) REFERENCES CATALOGO_SERVICIOS(codigo)
     ON DELETE RESTRICT;
 
-ALTER TABLE Presta ADD CONSTRAINT FK_PRESTA_SEDE
-    FOREIGN KEY (sede) REFERENCES Sedes(numero)
+ALTER TABLE PRESTA ADD CONSTRAINT FK_PRESTA_SEDE
+    FOREIGN KEY (sede) REFERENCES SEDES(numero)
     ON DELETE RESTRICT;
 
-ALTER TABLE Inventario ADD CONSTRAINT FK_INVENTARIO_SEDE
-    FOREIGN KEY (sede) REFERENCES Sedes(numero)
+ALTER TABLE INVENTARIO ADD CONSTRAINT FK_INVENTARIO_SEDE
+    FOREIGN KEY (sede) REFERENCES SEDES(numero)
     ON DELETE RESTRICT;
 
-ALTER TABLE Inventario ADD CONSTRAINT FK_INVENTARIO_REPUESTO
-    FOREIGN KEY (repuesto) REFERENCES Repuestos(serie)
+ALTER TABLE INVENTARIO ADD CONSTRAINT FK_INVENTARIO_REPUESTO
+    FOREIGN KEY (repuesto) REFERENCES REPUESTOS(serie)
     ON DELETE RESTRICT;
 
-ALTER TABLE Traslados ADD CONSTRAINT FK_TRASLADOS_SEDE_LLEGA
-    FOREIGN KEY (sedeLlega) REFERENCES Sedes(numero)
+ALTER TABLE TRASLADOS ADD CONSTRAINT FK_TRASLADOS_SEDE_LLEGA
+    FOREIGN KEY (sede_llega) REFERENCES SEDES(numero)
     ON DELETE RESTRICT;
 
-ALTER TABLE Traslados ADD CONSTRAINT FK_TRASLADOS_SEDE_SALE
-    FOREIGN KEY (sedeSale) REFERENCES Sedes(numero)
+ALTER TABLE TRASLADOS ADD CONSTRAINT FK_TRASLADOS_SEDE_SALE
+    FOREIGN KEY (sede_sale) REFERENCES SEDES(numero)
     ON DELETE RESTRICT;
 
-ALTER TABLE ConsumoRepuesto ADD CONSTRAINT FK_CONSUMO_REPUESTO_REPUESTO
-    FOREIGN KEY (repuesto) REFERENCES Repuestos(serie)
+ALTER TABLE CONSUMO_REPUESTO ADD CONSTRAINT FK_CONSUMO_REPUESTO_REPUESTO
+    FOREIGN KEY (repuesto) REFERENCES REPUESTOS(serie)
     ON DELETE RESTRICT;
 
-ALTER TABLE ConsumoRepuesto ADD CONSTRAINT FK_CONSUMO_REPUESTO_DETALLE_ORDEN
-    FOREIGN KEY (detalleOrden) REFERENCES DetalleOrdenes(id)
+ALTER TABLE CONSUMO_REPUESTO ADD CONSTRAINT FK_CONSUMO_REPUESTO_DETALLE_ORDEN
+    FOREIGN KEY (detalle_orden) REFERENCES DETALLE_ORDENES(id)
     ON DELETE CASCADE;
 
-ALTER TABLE Suministra ADD CONSTRAINT FK_SUMINISTRA_PROVEEDOR
-    FOREIGN KEY (proveedor) REFERENCES Proveedores(nit)
+ALTER TABLE SUMINISTRA ADD CONSTRAINT FK_SUMINISTRA_PROVEEDOR
+    FOREIGN KEY (proveedor) REFERENCES PROVEEDORES(nit)
     ON DELETE RESTRICT;
 
-ALTER TABLE Suministra ADD CONSTRAINT FK_SUMINISTRA_REPUESTO
-    FOREIGN KEY (repuesto) REFERENCES Repuestos(serie)
+ALTER TABLE SUMINISTRA ADD CONSTRAINT FK_SUMINISTRA_REPUESTO
+    FOREIGN KEY (repuesto) REFERENCES REPUESTOS(serie)
     ON DELETE RESTRICT;
 
-ALTER TABLE Compras ADD CONSTRAINT FK_COMPRAS_SEDE
-    FOREIGN KEY (sede) REFERENCES Sedes(numero)
+ALTER TABLE COMPRAS ADD CONSTRAINT FK_COMPRAS_SEDE
+    FOREIGN KEY (sede) REFERENCES SEDES(numero)
     ON DELETE RESTRICT;
 
-ALTER TABLE Compras ADD CONSTRAINT FK_COMPRAS_PROVEEDOR
-    FOREIGN KEY (proveedor) REFERENCES Proveedores(nit)
+ALTER TABLE COMPRAS ADD CONSTRAINT FK_COMPRAS_PROVEEDOR
+    FOREIGN KEY (proveedor) REFERENCES PROVEEDORES(nit)
     ON DELETE RESTRICT;
 
-ALTER TABLE DetalleCompras ADD CONSTRAINT FK_DETALLE_COMPRAS_COMPRA
-    FOREIGN KEY (compra) REFERENCES Compras(numero)
+ALTER TABLE DETALLE_COMPRAS ADD CONSTRAINT FK_DETALLE_COMPRAS_COMPRA
+    FOREIGN KEY (compra) REFERENCES COMPRAS(numero)
     ON DELETE CASCADE;
 
-ALTER TABLE DetalleCompras ADD CONSTRAINT FK_DETALLE_COMPRAS_REPUESTO
-    FOREIGN KEY (repuesto) REFERENCES Repuestos(serie)
+ALTER TABLE DETALLE_COMPRAS ADD CONSTRAINT FK_DETALLE_COMPRAS_REPUESTO
+    FOREIGN KEY (repuesto) REFERENCES REPUESTOS(serie)
     ON DELETE RESTRICT;
 
-ALTER TABLE Cobros ADD CONSTRAINT FK_COBROS_MOVIMIENTO
-    FOREIGN KEY (movimiento) REFERENCES Movimientos(numero)
+ALTER TABLE COBROS ADD CONSTRAINT FK_COBROS_MOVIMIENTO
+    FOREIGN KEY (movimiento) REFERENCES MOVIMIENTOS(numero)
     ON DELETE RESTRICT;
 
-ALTER TABLE Cobros ADD CONSTRAINT FK_COBROS_ORDEN
-    FOREIGN KEY (orden) REFERENCES Servicios(numero)
+ALTER TABLE COBROS ADD CONSTRAINT FK_COBROS_ORDEN
+    FOREIGN KEY (orden) REFERENCES SERVICIOS(numero)
     ON DELETE RESTRICT;
 
-ALTER TABLE Pagos ADD CONSTRAINT FK_PAGOS_MOVIMIENTO
-    FOREIGN KEY (movimiento) REFERENCES Movimientos(numero)
+ALTER TABLE PAGOS ADD CONSTRAINT FK_PAGOS_MOVIMIENTO
+    FOREIGN KEY (movimiento) REFERENCES MOVIMIENTOS(numero)
     ON DELETE RESTRICT;
 
-ALTER TABLE Pagos ADD CONSTRAINT FK_PAGOS_COMPRA
-    FOREIGN KEY (compra) REFERENCES Compras(numero)
+ALTER TABLE PAGOS ADD CONSTRAINT FK_PAGOS_COMPRA
+    FOREIGN KEY (compra) REFERENCES COMPRAS(numero)
     ON DELETE RESTRICT;
 
-ALTER TABLE Traslados ADD CONSTRAINT FK_TRASLADOS_REPUESTO
-    FOREIGN KEY (repuesto) REFERENCES Repuestos(serie)
+ALTER TABLE TRASLADOS ADD CONSTRAINT FK_TRASLADOS_REPUESTO
+    FOREIGN KEY (repuesto) REFERENCES REPUESTOS(serie)
     ON DELETE RESTRICT;
+
+
+
+
+
+-- MecaData · Tuplas
+ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT CK_DETALLE_ORDENES_FECHAS
+    CHECK (fecha_fin >= fecha_inicio);
+
+ALTER TABLE SERVICIOS ADD CONSTRAINT CK_SERVICIOS_FECHAS
+    CHECK (fecha_fin >= fecha_inicio);
+
+ALTER TABLE TRASLADOS ADD CONSTRAINT CK_TRASLADOS_SEDES
+    CHECK (sede_sale <> sede_llega);
+
+ALTER TABLE SERVICIOS ADD CONSTRAINT CK_SERVICIOS_ESTADO_FECHA_FIN
+    CHECK (estado <> 'F' OR fecha_fin IS NOT NULL);
+
+ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT CK_DETALLE_ORDENES_ESTADO_FECHA_FIN
+    CHECK (estado <> 'F' OR fecha_fin IS NOT NULL);
 
 --XTablas
 /*
@@ -495,155 +515,273 @@ DROP TABLE Vehiculos;
 DROP TABLE Clientes;
 DROP TABLE Personas;
 
-DROP DOMAIN TPlaca;
-DROP DOMAIN TCorreo;
-DROP DOMAIN TTelefono;
-DROP DOMAIN TCargo;
-DROP DOMAIN TEstadoOrden;
-DROP DOMAIN TEstadoGarantia;
-DROP DOMAIN TEstadoMovimiento;
-DROP DOMAIN TMedioPago;
-DROP DOMAIN TMoneda;
-DROP DOMAIN TNumeroOrden;
+DROP DOMAIN T_PLACA;
+DROP DOMAIN T_CORREO;
+DROP DOMAIN T_TELEFONO;
+DROP DOMAIN T_CARGO;
+DROP DOMAIN T_ESTADO_ORDEN;
+DROP DOMAIN T_ESTADO_GARANTIA;
+DROP DOMAIN T_ESTADO_MOVIMIENTO;
+DROP DOMAIN T_MEDIO_PAGO;
+DROP DOMAIN T_MONEDA;
+DROP DOMAIN T_NUMERO_ORDEN;
 */
 
+
+--DISPARADOERS
+
+    --Adicionar
+
+--Al crear un servicio, se coloca automáticamente su numero, fecha de inicio y estado (En proceso).
+CREATE OR REPLACE FUNCTION fc_tg_1_SERVICIOS_bi() RETURNS TRIGGER AS
+$$
+DECLARE
+    consecutivo_id INTEGER;
+    anno_actual CHAR(2);
+BEGIN
+    --Consecutivo
+    SELECT COALESCE(MAX(SPLIT_PART(numero, '-', 2)::INTEGER), 0) + 1 INTO consecutivo_id FROM SERVICIOS;
+    SELECT TO_CHAR(NOW(), 'YY') INTO anno_actual;
+    NEW.numero := 'OS' || anno_actual || '-' || LPAD(consecutivo_id::TEXT, 8, '0');
+
+    --fecha actual
+    NEW.fecha_inicio := CAST(NOW() AS DATE);
+
+    --estado inicial 
+    NEW.estado := 'E';
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_1_SERVICIOS_bi
+    BEFORE INSERT ON SERVICIOS 
+    FOR EACH ROW
+    EXECUTE FUNCTION fc_tg_1_SERVICIOS_bi();
+
+
+    --Modificar
+--Los datos de los servicios finalizados o cancelados no se pueden modificar. 
+CREATE OR REPLACE FUNCTION fc_tg_1_SERVICIOS_bu() RETURNS TRIGGER AS
+$$
+BEGIN
+    IF OLD.estado = 'F' THEN
+        RAISE EXCEPTION 'No se pueden modificar los servicios finalizados';
+    END IF;
+
+    IF OLD.estado = 'C' THEN
+        RAISE EXCEPTION 'No se pueden modificar los servicios cancelados';
+    END IF;
+
+    RETURN NEW;
+
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_1_SERVICIOS_bu
+    BEFORE UPDATE ON SERVICIOS 
+    FOR EACH ROW
+    EXECUTE FUNCTION fc_tg_1_SERVICIOS_bu();
+
+
+--La cantidad en el inventario de los repuestos gastados disminuye automaticamente.
+CREATE OR REPLACE FUNCTION fc_tg_1_CONSUMO_REPUESTO_ai() RETURNS TRIGGER AS
+$$
+DECLARE
+    sede_repuesto VARCHAR(5);
+BEGIN
+    SELECT s.sede INTO sede_repuesto
+    FROM DETALLE_ORDENES d, SERVICIOS s
+    WHERE s.numero = d.servicio AND d.id = NEW.detalle_orden;
+
+    UPDATE INVENTARIO 
+        SET cantidad = cantidad - NEW.cantidad
+        WHERE sede = sede_repuesto AND repuesto = NEW.repuesto;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_1_CONSUMO_REPUESTO_ai
+    AFTER INSERT ON CONSUMO_REPUESTO
+    FOR EACH ROW
+    EXECUTE FUNCTION fc_tg_1_CONSUMO_REPUESTO_ai();
+
+
+
+--Actualizar el valor de fecha final cuando el servicio se declara finalizado
+CREATE OR REPLACE FUNCTION fc_tg_2_SERVICIOS_bu() RETURNS TRIGGER AS
+$$
+BEGIN
+    IF NEW.estado = 'F' AND OLD.estado <> 'F' THEN 
+        NEW.fecha_fin := CAST(NOW() AS DATE);
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_2_SERVICIOS_bu 
+    BEFORE UPDATE ON SERVICIOS 
+    FOR EACH ROW
+    EXECUTE FUNCTION fc_tg_2_SERVICIOS_bu();
+
+
+    --Eliminar
+--No se permiten eliminar los serivicios realizados de la base de datos pero si los cancelados
+CREATE OR REPLACE FUNCTION fc_tg_2_SERVICIOS_bd() RETURNS TRIGGER AS
+$$
+BEGIN
+    IF OLD.estado IN ('F','E') THEN
+    RAISE EXCEPTION 'No se permiten eliminar los servicios realizados de la base datos';
+    END IF;
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_2_SERVICIOS_bd
+    BEFORE DELETE ON SERVICIOS
+    FOR EACH ROW
+    EXECUTE FUNCTION fc_tg_2_SERVICIOS_bd();
+
+
+
 --PoblarOK
-INSERT INTO Personas (cedula, nombre, apellido, correo, telefono) VALUES
+INSERT INTO PERSONAS (cedula, nombre, apellido, correo, telefono) VALUES
     ('1010101010', 'Ana', 'Gomez', 'ana.gomez@mail.com', '3001234567'),
     ('2020202020', 'Luis', 'Perez', 'luis.perez@mail.com', '3109876543');
 
-INSERT INTO Clientes (direccion, fechaRegistro, persona) VALUES
-    ('Calle 10 # 5-20', '2024-01-15', '1010101010');
+INSERT INTO CLIENTES (fecha_registro, persona) VALUES
+    ('2024-01-15', '1010101010');
 
-INSERT INTO Vehiculos (placa, kilometraje, marca, modelo, cilindraje, color, cliente) VALUES
+INSERT INTO VEHICULOS (placa, kilometraje, marca, modelo, cilindraje, color, cliente) VALUES
     ('ABC123', 45000, 'Mazda', 2020, 2000, 'Rojo', '1010101010');
 
-INSERT INTO Automoviles (vehiculo, numeroPuertas) VALUES
+INSERT INTO AUTOMOVILES (vehiculo, numero_puertas) VALUES
     ('ABC123', 4);
 
-INSERT INTO Sedes (numero, nombre, direccion, telefono) VALUES
+INSERT INTO SEDES (numero, nombre, direccion, telefono) VALUES
     ('S01', 'Sede Norte', 'Av 19 # 100-10', '6011234567'),
     ('S02', 'Sede Sur', 'Cra 30 # 1-50', '6017654321');
 
-INSERT INTO Empleados (cargo, fechaIngreso, salario, persona, sede) VALUES
+INSERT INTO EMPLEADOS (cargo, fecha_ingreso, salario, persona, sede) VALUES
     ('T', '2023-03-01', 3500000.00, '2020202020', 'S01');
 
-INSERT INTO Tecnicos (especialidad, empleado) VALUES
+INSERT INTO TECNICOS (especialidad, empleado) VALUES
     ('Motor', '2020202020');
 
-INSERT INTO CatalogoServicios (codigo, nombre, descripcion, precioBase, tiempoMedio) VALUES
+INSERT INTO CATALOGO_SERVICIOS (codigo, nombre, descripcion, precio_base, tiempo_medio) VALUES
     ('CS01', 'Cambio de aceite', 'Cambio de aceite y filtro', 150000.00, 1.5);
 
-INSERT INTO Presta (disponible, precioLocal, catalogoServicio, sede) VALUES
+INSERT INTO PRESTA (disponible, precio_local, catalogo_servicio, sede) VALUES
     (TRUE, 160000.00, 'CS01', 'S01');
+INSERT INTO SERVICIOS (vehiculo, sede) VALUES
+    ('ABC123', 'S01');
 
-INSERT INTO Servicios (numero, fechaInicio, fechaFin, estado, vehiculo, sede) VALUES
-    ('OS24-00000001', '2024-05-10', '2024-05-11', 'F', 'ABC123', 'S01');
+INSERT INTO DETALLE_ORDENES (id, valor_cobrado, estado, fecha_inicio, fecha_fin, catalogo_servicio, servicio) VALUES
+    ('DO01', 160000.00, 'E', CURRENT_DATE, NULL, 'CS01', 'OS26-00000001');
 
-INSERT INTO DetalleOrdenes (id, valorCobrado, estado, fechaInicio, fechaFin, catalogoServicio, servicio) VALUES
-    ('DO01', 160000.00, 'F', '2024-05-10', '2024-05-11', 'CS01', 'OS24-00000001');
-
-INSERT INTO Trabaja (horasTrabajadas, tecnico, detalleOrden) VALUES
+INSERT INTO TRABAJA (horas_trabajadas, tecnico, detalle_orden) VALUES
     (1.5, '2020202020', 'DO01');
 
-INSERT INTO Garantias (numero, fechaInicio, condiciones, estado, detalleOrden) VALUES
-    ('G01', '2024-05-11', 'Cubre fugas durante 3 meses', 'V', 'DO01');
+INSERT INTO GARANTIAS (numero, fecha_inicio, condiciones, estado, detalle_orden) VALUES
+    ('G01', CURRENT_DATE, 'Cubre fugas durante 3 meses', 'V', 'DO01');
 
-INSERT INTO Repuestos (serie, tipo, nombre) VALUES
+INSERT INTO REPUESTOS (serie, tipo, nombre) VALUES
     ('R001', 'Filtro', 'Filtro de aceite');
 
-INSERT INTO Inventario (cantidad, sede, repuesto) VALUES
+INSERT INTO INVENTARIO (cantidad, sede, repuesto) VALUES
     (20, 'S01', 'R001');
 
-INSERT INTO Traslados (numero, cantidad, fecha, detalle, sedeLlega, sedeSale, repuesto) VALUES
+INSERT INTO TRASLADOS (numero, cantidad, fecha, detalle, sede_llega, sede_sale, repuesto) VALUES
     ('TR01', 5, '2024-04-01', 'Reposicion de filtros', 'S02', 'S01', 'R001');
 
-INSERT INTO ConsumoRepuesto (cantidad, fechaUso, precio, repuesto, detalleOrden) VALUES
-    (1, '2024-05-10', 25000.00, 'R001', 'DO01');
+INSERT INTO CONSUMO_REPUESTO (cantidad, fecha_uso, precio, repuesto, detalle_orden) VALUES
+    (1, CURRENT_DATE, 25000.00, 'R001', 'DO01');
 
-INSERT INTO Proveedores (nit, correo, numeroContacto, representante, nombre, direccion) VALUES
-    ('900123456', 'ventas@repuestos.com', '6015550000', 'Carlos Ruiz', 'Repuestos SAS', 'Calle 80 # 20-30');
+INSERT INTO PROVEEDORES (nit, correo, numero_contacto, representante, nombre) VALUES
+    ('900123456', 'ventas@repuestos.com', '6015550000', 'Carlos Ruiz', 'Repuestos SAS');
 
-INSERT INTO Suministra (precioReferencia, proveedor, repuesto) VALUES
+INSERT INTO SUMINISTRA (precio_referencia, proveedor, repuesto) VALUES
     (20000.00, '900123456', 'R001');
 
-INSERT INTO Compras (numero, fecha, sede, proveedor) VALUES
+INSERT INTO COMPRAS (numero, fecha, sede, proveedor) VALUES
     ('C01', '2024-03-20', 'S01', '900123456');
 
-INSERT INTO DetalleCompras (id, cantidad, precioUnidad, compra, repuesto) VALUES
+INSERT INTO DETALLE_COMPRAS (id, cantidad, precio_unidad, compra, repuesto) VALUES
     ('DC01', 30, 20000.00, 'C01', 'R001');
 
-INSERT INTO Movimientos (numero, fecha, valor, descripcion, estado) VALUES
-    ('M01', '2024-05-11', 185000.00, 'Cobro orden OS24-00000001', 'P'),
+INSERT INTO MOVIMIENTOS (numero, fecha, valor, descripcion, estado) VALUES
+    ('M01', CURRENT_DATE, 185000.00, 'Cobro orden OS26-00000001', 'P'),
     ('M02', '2024-03-25', 600000.00, 'Pago compra C01', 'P');
 
-INSERT INTO Cobros (movimiento, medioPago, fechaExpedido, orden) VALUES
-    ('M01', 'T', '2024-05-11', 'OS24-00000001');
+INSERT INTO COBROS (movimiento, medio_pago, fecha_expedido, orden) VALUES
+    ('M01', 'T', CURRENT_DATE, 'OS26-00000001');
 
-INSERT INTO Pagos (movimiento, fechaPago, compra) VALUES
+INSERT INTO PAGOS (movimiento, fecha_pago, compra) VALUES
     ('M02', '2024-03-25', 'C01');
 
 --PoblarNoOK
 /*
 -- Tipo: kilometraje es int, no acepta texto
-INSERT INTO Vehiculos (placa, kilometraje, marca, modelo, cilindraje, color, cliente) VALUES
+INSERT INTO VEHICULOS (placa, kilometraje, marca, modelo, cilindraje, color, cliente) VALUES
     ('XYZ999', 'mucho', 'Renault', 2019, 1600, 'Azul', '1010101010');
 
 -- Nulidad: toda persona debe tener nombre
-INSERT INTO Personas (cedula, nombre, apellido, correo, telefono) VALUES
+INSERT INTO PERSONAS (cedula, nombre, apellido, correo, telefono) VALUES
     ('3030303030', NULL, 'Rojas', 'sin.nombre@mail.com', '3201112233');
 
 -- PK: no puede haber dos personas con la misma cedula
-INSERT INTO Personas (cedula, nombre, apellido, correo, telefono) VALUES
+INSERT INTO PERSONAS (cedula, nombre, apellido, correo, telefono) VALUES
     ('1010101010', 'Maria', 'Diaz', 'maria.diaz@mail.com', '3154445566');
 
 -- UK: no puede haber dos personas con el mismo correo
-INSERT INTO Personas (cedula, nombre, apellido, correo, telefono) VALUES
+INSERT INTO PERSONAS (cedula, nombre, apellido, correo, telefono) VALUES
     ('4040404040', 'Pedro', 'Lopez', 'ana.gomez@mail.com', '3167778899');
 
 -- FK: un vehiculo solo puede pertenecer a un cliente existente
-INSERT INTO Vehiculos (placa, kilometraje, marca, modelo, cilindraje, color, cliente) VALUES
+INSERT INTO VEHICULOS (placa, kilometraje, marca, modelo, cilindraje, color, cliente) VALUES
     ('XYZ999', 30000, 'Renault', 2019, 1600, 'Azul', '9999999999');
 
 -- Dominio: el numero de orden debe tener formato OSAA-########
-INSERT INTO Servicios (numero, fechaInicio, fechaFin, estado, vehiculo, sede) VALUES
+INSERT INTO SERVICIOS (numero, fecha_inicio, fecha_fin, estado, vehiculo, sede) VALUES
     ('ORDEN1', '2024-06-01', NULL, 'E', 'ABC123', 'S01');
 
 -- Dominio: estado de orden solo acepta F, E o C
-INSERT INTO Servicios (numero, fechaInicio, fechaFin, estado, vehiculo, sede) VALUES
+INSERT INTO SERVICIOS (numero, fecha_inicio, fecha_fin, estado, vehiculo, sede) VALUES
     ('OS24-00000002', '2024-06-01', NULL, 'Z', 'ABC123', 'S01');
 
 -- CHECK de atributo: el inventario no puede ser negativo
-INSERT INTO Inventario (cantidad, sede, repuesto) VALUES
+INSERT INTO INVENTARIO (cantidad, sede, repuesto) VALUES
     (-5, 'S02', 'R001');
 */
 
 --XPoblar
 /*
-DELETE FROM Pagos;
-DELETE FROM Cobros;
-DELETE FROM Movimientos;
-DELETE FROM DetalleCompras;
-DELETE FROM Compras;
-DELETE FROM Suministra;
-DELETE FROM Proveedores;
-DELETE FROM ConsumoRepuesto;
-DELETE FROM Traslados;
-DELETE FROM Inventario;
-DELETE FROM Repuestos;
-DELETE FROM Garantias;
-DELETE FROM Trabaja;
-DELETE FROM DetalleOrdenes;
-DELETE FROM Servicios;
-DELETE FROM Presta;
-DELETE FROM CatalogoServicios;
-DELETE FROM Tecnicos;
-DELETE FROM Empleados;
-DELETE FROM Sedes;
-DELETE FROM Automoviles;
-DELETE FROM Vehiculos;
-DELETE FROM Clientes;
-DELETE FROM Personas;
+DELETE FROM PAGOS;
+DELETE FROM COBROS;
+DELETE FROM MOVIMIENTOS;
+DELETE FROM DETALLE_COMPRAS;
+DELETE FROM COMPRAS;
+DELETE FROM SUMINISTRA;
+DELETE FROM PROVEEDORES;
+DELETE FROM CONSUMO_REPUESTO;
+DELETE FROM TRASLADOS;
+DELETE FROM INVENTARIO;
+DELETE FROM REPUESTOS;
+DELETE FROM GARANTIAS;
+DELETE FROM TRABAJA;
+DELETE FROM DETALLE_ORDENES;
+DELETE FROM SERVICIOS;
+DELETE FROM PRESTA;
+DELETE FROM CATALOGO_SERVICIOS;
+DELETE FROM TECNICOS;
+DELETE FROM EMPLEADOS;
+DELETE FROM SEDES;
+DELETE FROM AUTOMOVILES;
+DELETE FROM VEHICULOS;
+DELETE FROM CLIENTES;
+DELETE FROM PERSONAS;
 */
 
 -- Consultas
@@ -656,11 +794,11 @@ SELECT  p.cedula,
         COUNT(DISTINCT v.placa) AS numeroVehiculos,
         COUNT(DISTINCT s.numero) AS numeroOrdenes,
         SUM(m.valor) AS totalCobrado
-FROM Cobros c
-JOIN Movimientos m ON m.numero = c.movimiento
-JOIN Servicios s ON s.numero = c.orden
-JOIN Vehiculos v ON v.placa = s.vehiculo
-JOIN Personas p ON p.cedula = v.cliente
+FROM COBROS c
+JOIN MOVIMIENTOS m ON m.numero = c.movimiento
+JOIN SERVICIOS s ON s.numero = c.orden
+JOIN VEHICULOS v ON v.placa = s.vehiculo
+JOIN PERSONAS p ON p.cedula = v.cliente
 WHERE m.estado = 'P' AND m.fecha BETWEEN '2024-01-01' AND '2024-12-31'
 GROUP BY p.cedula, p.nombre, p.apellido
 ORDER BY totalCobrado DESC;
@@ -673,22 +811,22 @@ SELECT  s.numero,
         s.vehiculo AS placa,
         p.nombre,
         p.apellido,
-        s.fechaInicio
-FROM Servicios s
-JOIN Vehiculos v ON v.placa = s.vehiculo
-JOIN Personas p ON p.cedula = v.cliente
-JOIN Empleados e ON e.sede = s.sede
+        s.fecha_inicio
+FROM SERVICIOS s
+JOIN VEHICULOS v ON v.placa = s.vehiculo
+JOIN PERSONAS p ON p.cedula = v.cliente
+JOIN EMPLEADOS e ON e.sede = s.sede
 WHERE s.estado = 'E' AND e.cargo = 'G' AND e.persona = '3030303030'
-ORDER BY s.fechaInicio ASC;
+ORDER BY s.fecha_inicio ASC;
 
     -- Saber que servivios presta una sede
 SELECT  cs.codigo,
         cs.nombre,
-        COALESCE(p.precioLocal, cs.precioBase) AS precio,
-        cs.tiempoMedio
-FROM Empleados e
-JOIN Presta p ON p.sede = e.sede
-JOIN CatalogoServicios cs ON cs.codigo = p.catalogoServicio
+        COALESCE(p.precio_local, cs.precio_base) AS precio,
+        cs.tiempo_medio
+FROM EMPLEADOS e
+JOIN PRESTA p ON p.sede = e.sede
+JOIN CATALOGO_SERVICIOS cs ON cs.codigo = p.catalogo_servicio
 WHERE e.persona = '2020202020' AND e.cargo = 'A' AND p.disponible = TRUE
 ORDER BY cs.nombre;
 
@@ -698,24 +836,24 @@ SELECT  r.serie,
         se.numero AS sede,
         se.nombre AS nombreSede,
         i.cantidad
-FROM Inventario i
-JOIN Repuestos r ON r.serie = i.repuesto
-JOIN Sedes se ON se.numero = i.sede
+FROM INVENTARIO i
+JOIN REPUESTOS r ON r.serie = i.repuesto
+JOIN SEDES se ON se.numero = i.sede
 WHERE r.nombre = 'Filtro de aceite'
 ORDER BY i.cantidad ASC;
 
     -- Historial de servicios del técnico
 SELECT  s.numero,
-        d.fechaFin AS fechaCierre,
+        d.fecha_fin AS fechaCierre,
         s.vehiculo AS placa,
         cs.nombre AS servicio,
         d.estado
-FROM Trabaja t
-JOIN DetalleOrdenes d ON d.id = t.detalleOrden
-JOIN Servicios s ON s.numero = d.servicio
-JOIN CatalogoServicios cs ON cs.codigo = d.catalogoServicio
-WHERE t.tecnico = '2020202020' AND d.fechaFin BETWEEN DATE '2024-01-01' AND DATE '2024-12-31'
-ORDER BY d.fechaFin DESC;
+FROM TRABAJA t
+JOIN DETALLE_ORDENES d ON d.id = t.detalle_orden
+JOIN SERVICIOS s ON s.numero = d.servicio
+JOIN CATALOGO_SERVICIOS cs ON cs.codigo = d.catalogo_servicio
+WHERE t.tecnico = '2020202020' AND d.fecha_fin BETWEEN DATE '2024-01-01' AND DATE '2024-12-31'
+ORDER BY d.fecha_fin DESC;
 
     -- Tecnicos sin servicio asignado
 SELECT  p.cedula AS cedulaTecnico, 
@@ -723,13 +861,13 @@ SELECT  p.cedula AS cedulaTecnico,
         p.apellido AS apellidoTecnico, 
         t.especialidad AS especialidadTecnico, 
         p.telefono AS telefonoTecnico
-FROM Tecnicos t 
-JOIN Empleados e ON t.empleado = e.persona
-JOIN Personas p ON e.persona = p.cedula
+FROM TECNICOS t 
+JOIN EMPLEADOS e ON t.empleado = e.persona
+JOIN PERSONAS p ON e.persona = p.cedula
 WHERE t.empleado NOT IN (
     SELECT tra.tecnico
-    FROM Trabaja tra, DetalleOrdenes det
-    WHERE tra.detalleOrden = det.id AND det.estado = 'E'
+    FROM TRABAJA tra, DETALLE_ORDENES det
+    WHERE tra.detalle_orden = det.id AND det.estado = 'E'
 )
 ORDER BY  t.especialidad ASC, p.nombre ASC;
 
@@ -740,36 +878,36 @@ SELECT  s.numero AS numeroSede,
         p.apellido AS apellidoGerente, 
         p.correo AS correoGerente, 
         p.telefono AS telefonoGerente
-FROM Sedes s
-JOIN Empleados e ON e.sede = s.numero
-JOIN Personas p ON p.cedula = e.persona
+FROM SEDES s
+JOIN EMPLEADOS e ON e.sede = s.numero
+JOIN PERSONAS p ON p.cedula = e.persona
 WHERE e.cargo = 'G'
 ORDER BY s.nombre ASC;
 
     -- Consultar estado de un ser
 SELECT  s.numero AS numeroOrden, 
         s.sede AS sede, 
-        det.fechaInicio AS fechaInicio, 
+        det.fecha_inicio AS fechaInicio, 
         cat.nombre AS servicioRealizado, 
         det.estado AS estadoServicio
-FROM Servicios s
-JOIN Vehiculos v ON v.placa = s.vehiculo
-JOIN DetalleOrdenes det ON det.servicio = s.numero
-JOIN CatalogoServicios cat ON cat.codigo = det.catalogoServicio
+FROM SERVICIOS s
+JOIN VEHICULOS v ON v.placa = s.vehiculo
+JOIN DETALLE_ORDENES det ON det.servicio = s.numero
+JOIN CATALOGO_SERVICIOS cat ON cat.codigo = det.catalogo_servicio
 WHERE v.cliente = '1010101010' AND v.placa = 'ABC123' AND s.estado = 'E'
-ORDER BY det.fechaInicio ASC;
+ORDER BY det.fecha_inicio ASC;
 
     -- Consultar las garantias vigentes
 SELECT  g.numero, 
         v.placa, 
         cat.nombre, 
-        g.fechaInicio, 
+        g.fecha_inicio, 
         g.condiciones
-FROM Garantias g, Vehiculos v, CatalogoServicios cat, DetalleOrdenes det, Servicios s
-WHERE g.detalleOrden = det.id 
+FROM GARANTIAS g, VEHICULOS v, CATALOGO_SERVICIOS cat, DETALLE_ORDENES det, SERVICIOS s
+WHERE g.detalle_orden = det.id 
     AND v.placa = s.vehiculo 
-    AND det.catalogoServicio = cat.codigo 
+    AND det.catalogo_servicio = cat.codigo 
     AND det.servicio = s.numero 
     AND v.cliente = '1010101010' 
     AND g.estado = 'V'
-ORDER BY g.fechaInicio DESC;
+ORDER BY g.fecha_inicio DESC;
