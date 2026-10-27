@@ -30,3 +30,9 @@ INSERT INTO SERVICIOS (numero, fecha_inicio, fecha_fin, estado, vehiculo, sede) 
 -- CHECK de atributo: el inventario no puede ser negativo
 INSERT INTO INVENTARIO (cantidad, sede, repuesto) VALUES
     (-5, 'S02', 'R001');
+
+-- Disparador: no se pueden modificar los servicios finalizados
+UPDATE SERVICIOS SET sede = 'S02' WHERE numero = 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000002';
+
+-- Disparador: no se pueden eliminar los servicios en proceso
+DELETE FROM SERVICIOS WHERE numero = 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000001';

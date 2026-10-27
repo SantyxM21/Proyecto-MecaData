@@ -11,7 +11,7 @@ JOIN MOVIMIENTOS m ON m.numero = c.movimiento
 JOIN SERVICIOS s ON s.numero = c.orden
 JOIN VEHICULOS v ON v.placa = s.vehiculo
 JOIN PERSONAS p ON p.cedula = v.cliente
-WHERE m.estado = 'P' AND m.fecha BETWEEN '2024-01-01' AND '2024-12-31'
+WHERE m.estado = 'P' AND m.fecha BETWEEN '2026-01-01' AND '2026-12-31'
 GROUP BY p.cedula, p.nombre, p.apellido
 ORDER BY totalCobrado DESC;
 
@@ -38,7 +38,7 @@ SELECT  cs.codigo,
 FROM EMPLEADOS e
 JOIN PRESTA p ON p.sede = e.sede
 JOIN CATALOGO_SERVICIOS cs ON cs.codigo = p.catalogo_servicio
-WHERE e.persona = '2020202020' AND e.cargo = 'A' AND p.disponible = TRUE
+WHERE e.persona = '5050505050' AND e.cargo = 'A' AND p.disponible = TRUE
 ORDER BY cs.nombre;
 
     -- Consultar cantidad de un repuesto
@@ -63,7 +63,7 @@ FROM TRABAJA t
 JOIN DETALLE_ORDENES d ON d.id = t.detalle_orden
 JOIN SERVICIOS s ON s.numero = d.servicio
 JOIN CATALOGO_SERVICIOS cs ON cs.codigo = d.catalogo_servicio
-WHERE t.tecnico = '2020202020' AND d.fecha_fin BETWEEN DATE '2024-01-01' AND DATE '2024-12-31'
+WHERE t.tecnico = '2020202020' AND d.fecha_fin BETWEEN DATE '2026-01-01' AND DATE '2026-12-31'
 ORDER BY d.fecha_fin DESC;
 
     -- Tecnicos sin servicio asignado
