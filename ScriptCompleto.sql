@@ -508,26 +508,27 @@ DROP DOMAIN IF EXISTS T_NUMERO_ORDEN;
 
 
 --DISPARADOERS
+-
+    --Valores por omision
+ALTER TABLE SERVICIOS ALTER COLUMN fecha_inicio SET DEFAULT CURRENT_DATE;
+ALTER TABLE SERVICIOS ALTER COLUMN estado SET DEFAULT 'E'; --E: En proceso
+
+--Consecutivo del numero de la orden (OSAA-########) con secuencia.
+CREATE SEQUENCE SQ_SERVICIOS_numero OWNED BY SERVICIOS.numero;
+SELECT setval('SQ_SERVICIOS_numero',
+                (SELECT COALESCE(MAX(SPLIT_PART(numero, '-', 2)::INTEGER), 0) + 1 FROM SERVICIOS), false);
+ALTER TABLE SERVICIOS ALTER COLUMN numero SET DEFAULT
+    'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-' || LPAD(nextval('SQ_SERVICIOS_numero')::TEXT, 8, '0');
 
     --Adicionar
 
---Al crear un servicio, se coloca automáticamente su numero, fecha de inicio y estado (En proceso).
+--Al crear un servicio, su fecha de inicio no puede ser futura.
 CREATE OR REPLACE FUNCTION fc_tg_1_SERVICIOS_bi() RETURNS TRIGGER AS
 $$
-DECLARE
-    consecutivo_id INTEGER;
-    anno_actual CHAR(2);
 BEGIN
-    --Consecutivo
-    SELECT COALESCE(MAX(SPLIT_PART(numero, '-', 2)::INTEGER), 0) + 1 INTO consecutivo_id FROM SERVICIOS;
-    SELECT TO_CHAR(NOW(), 'YY') INTO anno_actual;
-    NEW.numero := 'OS' || anno_actual || '-' || LPAD(consecutivo_id::TEXT, 8, '0');
-
-    --fecha actual
-    NEW.fecha_inicio := CAST(NOW() AS DATE);
-
-    --estado inicial 
-    NEW.estado := 'E';
+    IF NEW.fecha_inicio > CURRENT_DATE THEN
+        RAISE EXCEPTION 'La fecha de inicio del servicio no puede ser futura';
+    END IF;
 
     RETURN NEW;
 END;
@@ -600,6 +601,11 @@ CREATE TRIGGER tg_2_SERVICIOS_bd
 
 
     --XDisparadores
+-- ALTER TABLE SERVICIOS ALTER COLUMN fecha_inicio DROP DEFAULT;
+-- ALTER TABLE SERVICIOS ALTER COLUMN estado DROP DEFAULT;
+-- ALTER TABLE SERVICIOS ALTER COLUMN numero DROP DEFAULT;
+-- DROP SEQUENCE IF EXISTS SQ_SERVICIOS_numero;
+
 -- DROP TRIGGER IF EXISTS tg_1_SERVICIOS_bi ON SERVICIOS;
 -- DROP TRIGGER IF EXISTS tg_1_SERVICIOS_bu ON SERVICIOS;
 -- DROP TRIGGER IF EXISTS tg_2_SERVICIOS_bu ON SERVICIOS;
