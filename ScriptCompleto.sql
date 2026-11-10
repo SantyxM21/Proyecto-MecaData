@@ -87,6 +87,7 @@ CREATE TABLE DETALLE_ORDENES(
 CREATE TABLE GARANTIAS(
     numero VARCHAR(10) NOT NULL,
     fecha_inicio DATE NOT NULL,
+    fecha_fin DATE NOT NULL,
     condiciones VARCHAR(200) NOT NULL,
     estado T_ESTADO_GARANTIA NOT NULL, 
     servicio T_NUMERO_ORDEN NOT NULL,
@@ -465,6 +466,9 @@ ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT CK_DETALLE_ORDENES_ESTADO_FECHA_FIN
 ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT CK_DETALLE_ORDENES_ESTADO_TECNICO
     CHECK (estado <> 'F' OR (tecnico IS NOT NULL AND horas_trabajadas IS NOT NULL));
 
+ALTER TABLE GARANTIAS ADD CONSTRAINT CK_GARANTIAS_FECHAS
+    CHECK (fecha_fin >= fecha_inicio);
+
 --XTablas
 /*
 DROP TABLE IF EXISTS PAGOS;
@@ -681,9 +685,9 @@ UPDATE SERVICIOS SET estado = 'F' WHERE numero = 'OS' || TO_CHAR(CURRENT_DATE, '
 UPDATE SERVICIOS SET estado = 'F' WHERE numero = 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000003';
 UPDATE SERVICIOS SET estado = 'C' WHERE numero = 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000004';
 
-INSERT INTO GARANTIAS (numero, fecha_inicio, condiciones, estado, servicio, item) VALUES
-    ('G01', CURRENT_DATE, 'Cubre desgaste prematuro de pastillas durante 6 meses', 'V', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000002', 1),
-    ('G02', CURRENT_DATE, 'Cubre ruidos en el sistema de frenos durante 3 meses', 'V', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000003', 1);
+INSERT INTO GARANTIAS (numero, fecha_inicio, fecha_fin, condiciones, estado, servicio, item) VALUES
+    ('G01', CURRENT_DATE, CAST(CURRENT_DATE + INTERVAL '6 months' AS DATE), 'Cubre desgaste prematuro de pastillas durante 6 meses', 'V', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000002', 1),
+    ('G02', CURRENT_DATE, CAST(CURRENT_DATE + INTERVAL '3 months' AS DATE), 'Cubre ruidos en el sistema de frenos durante 3 meses', 'V', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000003', 1);
 
 INSERT INTO TRASLADOS (numero, cantidad, fecha, detalle, sede_llega, sede_sale, repuesto) VALUES
     ('TR01', 5, '2024-04-01', 'Reposicion de filtros', 'S02', 'S01', 'R001');
@@ -758,6 +762,10 @@ DELETE FROM SERVICIOS WHERE numero = 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00
 -- FK: el tecnico de un detalle de orden debe ser un tecnico existente
 INSERT INTO DETALLE_ORDENES (item, valor_cobrado, estado, fecha_inicio, fecha_fin, catalogo_servicio, servicio, tecnico, horas_trabajadas) VALUES
     (2, 150000.00, 'E', CURRENT_DATE, NULL, 'CS01', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000001', '9999999999', NULL);
+
+-- Nulidad: toda garantia debe tener fecha de fin
+INSERT INTO GARANTIAS (numero, fecha_inicio, fecha_fin, condiciones, estado, servicio, item) VALUES
+    ('G04', '2026-06-01', NULL, 'Sin fecha de fin', 'V', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000001', 1);
 */
 
 --XPoblar
@@ -906,6 +914,7 @@ SELECT  g.numero,
         v.placa, 
         cat.nombre, 
         g.fecha_inicio, 
+        g.fecha_fin, 
         g.condiciones
 FROM GARANTIAS g, VEHICULOS v, CATALOGO_SERVICIOS cat, DETALLE_ORDENES det, SERVICIOS s
 WHERE g.servicio = det.servicio 
