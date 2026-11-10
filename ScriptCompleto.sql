@@ -72,20 +72,16 @@ CREATE TABLE TECNICOS(
     empleado VARCHAR(15) NOT NULL
 );
 
-CREATE TABLE TRABAJA(
-    horas_trabajadas NUMERIC NOT NULL,
-    tecnico VARCHAR(15) NOT NULL,
-    detalle_orden VARCHAR(10) NOT NULL
-);
-
 CREATE TABLE DETALLE_ORDENES(
-    id VARCHAR(10) NOT NULL,
+    item INTEGER NOT NULL,
     valor_cobrado T_MONEDA,
     estado T_ESTADO_ORDEN NOT NULL, 
     fecha_inicio DATE NOT NULL,
     fecha_fin DATE,
     catalogo_servicio VARCHAR(10) NOT NULL,
-    servicio T_NUMERO_ORDEN NOT NULL
+    servicio T_NUMERO_ORDEN NOT NULL,
+    tecnico VARCHAR(15),
+    horas_trabajadas NUMERIC
 );
 
 CREATE TABLE GARANTIAS(
@@ -93,7 +89,8 @@ CREATE TABLE GARANTIAS(
     fecha_inicio DATE NOT NULL,
     condiciones VARCHAR(200) NOT NULL,
     estado T_ESTADO_GARANTIA NOT NULL, 
-    detalle_orden VARCHAR(10) NOT NULL 
+    servicio T_NUMERO_ORDEN NOT NULL,
+    item INTEGER NOT NULL
 );
 
 CREATE TABLE SERVICIOS(
@@ -154,7 +151,8 @@ CREATE TABLE CONSUMO_REPUESTO(
     fecha_uso DATE NOT NULL,
     precio T_MONEDA NOT NULL,
     repuesto VARCHAR(20) NOT NULL, 
-    detalle_orden VARCHAR(10) NOT NULL
+    servicio T_NUMERO_ORDEN NOT NULL,
+    item INTEGER NOT NULL
 );
 
 CREATE TABLE SUMINISTRA(
@@ -226,7 +224,10 @@ ALTER TABLE CATALOGO_SERVICIOS ADD CONSTRAINT CK_CATALOGO_SERVICIOS_TIEMPO_MEDIO
 ALTER TABLE PRESTA ADD CONSTRAINT CK_PRESTA_PRECIO_LOCAL
     CHECK (precio_local > 0);
 
-ALTER TABLE TRABAJA ADD CONSTRAINT CK_TRABAJA_HORAS_TRABAJADAS
+ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT CK_DETALLE_ORDENES_ITEM
+    CHECK (item > 0);
+
+ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT CK_DETALLE_ORDENES_HORAS_TRABAJADAS
     CHECK (horas_trabajadas > 0);
 
 ALTER TABLE INVENTARIO ADD CONSTRAINT CK_INVENTARIO_CANTIDAD
@@ -260,11 +261,8 @@ ALTER TABLE EMPLEADOS ADD CONSTRAINT PK_EMPLEADOS
 ALTER TABLE TECNICOS ADD CONSTRAINT PK_TECNICOS
     PRIMARY KEY (empleado);
 
-ALTER TABLE TRABAJA ADD CONSTRAINT PK_TRABAJA
-    PRIMARY KEY (tecnico, detalle_orden);
-
 ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT PK_DETALLE_ORDENES
-    PRIMARY KEY (id);  
+    PRIMARY KEY (servicio, item);
 
 ALTER TABLE GARANTIAS ADD CONSTRAINT PK_GARANTIAS
     PRIMARY KEY (numero);
@@ -291,7 +289,7 @@ ALTER TABLE TRASLADOS ADD CONSTRAINT PK_TRASLADOS
     PRIMARY KEY (numero);
 
 ALTER TABLE CONSUMO_REPUESTO ADD CONSTRAINT PK_CONSUMO_REPUESTO
-    PRIMARY KEY (repuesto, detalle_orden);
+    PRIMARY KEY (servicio, item, repuesto);
 
 ALTER TABLE SUMINISTRA ADD CONSTRAINT PK_SUMINISTRA
     PRIMARY KEY (proveedor, repuesto);
@@ -320,7 +318,7 @@ ALTER TABLE PERSONAS ADD CONSTRAINT UK_PERSONAS_CORREO
     UNIQUE (correo);
 
 ALTER TABLE GARANTIAS ADD CONSTRAINT UK_GARANTIAS_DETALLE_ORDEN
-    UNIQUE (detalle_orden);
+    UNIQUE (servicio, item);
 
 ALTER TABLE SEDES ADD CONSTRAINT UK_SEDES_TELEFONO
     UNIQUE (telefono);
@@ -356,14 +354,6 @@ ALTER TABLE TECNICOS ADD CONSTRAINT FK_TECNICOS_EMPLEADO
     FOREIGN KEY (empleado) REFERENCES EMPLEADOS(persona)
     ON DELETE CASCADE;
 
-ALTER TABLE TRABAJA ADD CONSTRAINT FK_TRABAJA_TECNICO
-    FOREIGN KEY (tecnico) REFERENCES TECNICOS(empleado)
-    ON DELETE RESTRICT;
-
-ALTER TABLE TRABAJA ADD CONSTRAINT FK_TRABAJA_DETALLE_ORDEN
-    FOREIGN KEY (detalle_orden) REFERENCES DETALLE_ORDENES(id)
-    ON DELETE CASCADE;
-
 ALTER TABLE AUTOMOVILES ADD CONSTRAINT FK_AUTOMOVILES_VEHICULO
     FOREIGN KEY (vehiculo) REFERENCES VEHICULOS(placa)
     ON DELETE CASCADE;
@@ -380,8 +370,12 @@ ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT FK_DETALLE_ORDENES_SERVICIO
     FOREIGN KEY (servicio) REFERENCES SERVICIOS(numero)
     ON DELETE CASCADE;
 
+ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT FK_DETALLE_ORDENES_TECNICO
+    FOREIGN KEY (tecnico) REFERENCES TECNICOS(empleado)
+    ON DELETE RESTRICT;
+
 ALTER TABLE GARANTIAS ADD CONSTRAINT FK_GARANTIAS_DETALLE_ORDEN
-    FOREIGN KEY (detalle_orden) REFERENCES DETALLE_ORDENES(id)
+    FOREIGN KEY (servicio, item) REFERENCES DETALLE_ORDENES(servicio, item)
     ON DELETE RESTRICT;
 
 ALTER TABLE SERVICIOS ADD CONSTRAINT FK_SERVICIOS_VEHICULO
@@ -421,7 +415,7 @@ ALTER TABLE CONSUMO_REPUESTO ADD CONSTRAINT FK_CONSUMO_REPUESTO_REPUESTO
     ON DELETE RESTRICT;
 
 ALTER TABLE CONSUMO_REPUESTO ADD CONSTRAINT FK_CONSUMO_REPUESTO_DETALLE_ORDEN
-    FOREIGN KEY (detalle_orden) REFERENCES DETALLE_ORDENES(id)
+    FOREIGN KEY (servicio, item) REFERENCES DETALLE_ORDENES(servicio, item)
     ON DELETE CASCADE;
 
 ALTER TABLE SUMINISTRA ADD CONSTRAINT FK_SUMINISTRA_PROVEEDOR
@@ -488,6 +482,9 @@ ALTER TABLE SERVICIOS ADD CONSTRAINT CK_SERVICIOS_ESTADO_FECHA_FIN
 ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT CK_DETALLE_ORDENES_ESTADO_FECHA_FIN
     CHECK (estado <> 'F' OR fecha_fin IS NOT NULL);
 
+ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT CK_DETALLE_ORDENES_ESTADO_TECNICO
+    CHECK (estado <> 'F' OR (tecnico IS NOT NULL AND horas_trabajadas IS NOT NULL));
+
 --XTablas
 /*
 DROP TABLE IF EXISTS PAGOS;
@@ -500,7 +497,6 @@ DROP TABLE IF EXISTS CONSUMO_REPUESTO;
 DROP TABLE IF EXISTS TRASLADOS;
 DROP TABLE IF EXISTS INVENTARIO;
 DROP TABLE IF EXISTS GARANTIAS;
-DROP TABLE IF EXISTS TRABAJA;
 DROP TABLE IF EXISTS DETALLE_ORDENES;
 DROP TABLE IF EXISTS SERVICIOS;
 DROP TABLE IF EXISTS AUTOMOVILES;
@@ -591,8 +587,8 @@ DECLARE
     sede_repuesto VARCHAR(5);
 BEGIN
     SELECT s.sede INTO sede_repuesto
-    FROM DETALLE_ORDENES d, SERVICIOS s
-    WHERE s.numero = d.servicio AND d.id = NEW.detalle_orden;
+    FROM SERVICIOS s
+    WHERE s.numero = NEW.servicio;
 
     UPDATE INVENTARIO 
         SET cantidad = cantidad - NEW.cantidad
@@ -724,29 +720,24 @@ INSERT INTO SERVICIOS (vehiculo, sede) VALUES ('DEF456', 'S01');
 INSERT INTO SERVICIOS (vehiculo, sede) VALUES ('GHI789', 'S02');
 INSERT INTO SERVICIOS (vehiculo, sede) VALUES ('GHI789', 'S02');
 
-INSERT INTO DETALLE_ORDENES (id, valor_cobrado, estado, fecha_inicio, fecha_fin, catalogo_servicio, servicio) VALUES
-    ('DO01', 160000.00, 'E', CURRENT_DATE, NULL, 'CS01', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000001'),
-    ('DO02', 220000.00, 'E', CURRENT_DATE, NULL, 'CS02', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000002'),
-    ('DO03', 230000.00, 'E', CURRENT_DATE, NULL, 'CS02', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000003');
+INSERT INTO DETALLE_ORDENES (item, valor_cobrado, estado, fecha_inicio, fecha_fin, catalogo_servicio, servicio, tecnico, horas_trabajadas) VALUES
+    (1, 160000.00, 'E', CURRENT_DATE, NULL, 'CS01', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000001', '2020202020', 1.5),
+    (1, 220000.00, 'E', CURRENT_DATE, NULL, 'CS02', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000002', '2020202020', 2),
+    (1, 230000.00, 'E', CURRENT_DATE, NULL, 'CS02', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000003', '6060606060', 2.5);
 
-INSERT INTO TRABAJA (horas_trabajadas, tecnico, detalle_orden) VALUES
-    (1.5, '2020202020', 'DO01'),
-    (2, '2020202020', 'DO02'),
-    (2.5, '6060606060', 'DO03');
+INSERT INTO CONSUMO_REPUESTO (cantidad, fecha_uso, precio, repuesto, servicio, item) VALUES
+    (1, CURRENT_DATE, 25000.00, 'R001', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000001', 1),
+    (2, CURRENT_DATE, 60000.00, 'R002', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000002', 1),
+    (2, CURRENT_DATE, 62000.00, 'R002', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000003', 1);
 
-INSERT INTO CONSUMO_REPUESTO (cantidad, fecha_uso, precio, repuesto, detalle_orden) VALUES
-    (1, CURRENT_DATE, 25000.00, 'R001', 'DO01'),
-    (2, CURRENT_DATE, 60000.00, 'R002', 'DO02'),
-    (2, CURRENT_DATE, 62000.00, 'R002', 'DO03');
-
-UPDATE DETALLE_ORDENES SET estado = 'F', fecha_fin = CURRENT_DATE WHERE id IN ('DO02', 'DO03');
+UPDATE DETALLE_ORDENES SET estado = 'F', fecha_fin = CURRENT_DATE WHERE item = 1 AND servicio IN ('OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000002', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000003');
 UPDATE SERVICIOS SET estado = 'F' WHERE numero = 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000002';
 UPDATE SERVICIOS SET estado = 'F' WHERE numero = 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000003';
 UPDATE SERVICIOS SET estado = 'C' WHERE numero = 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000004';
 
-INSERT INTO GARANTIAS (numero, fecha_inicio, condiciones, estado, detalle_orden) VALUES
-    ('G01', CURRENT_DATE, 'Cubre desgaste prematuro de pastillas durante 6 meses', 'V', 'DO02'),
-    ('G02', CURRENT_DATE, 'Cubre ruidos en el sistema de frenos durante 3 meses', 'V', 'DO03');
+INSERT INTO GARANTIAS (numero, fecha_inicio, condiciones, estado, servicio, item) VALUES
+    ('G01', CURRENT_DATE, 'Cubre desgaste prematuro de pastillas durante 6 meses', 'V', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000002', 1),
+    ('G02', CURRENT_DATE, 'Cubre ruidos en el sistema de frenos durante 3 meses', 'V', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000003', 1);
 
 INSERT INTO TRASLADOS (numero, cantidad, fecha, detalle, sede_llega, sede_sale, repuesto) VALUES
     ('TR01', 5, '2024-04-01', 'Reposicion de filtros', 'S02', 'S01', 'R001');
@@ -821,6 +812,10 @@ UPDATE SERVICIOS SET sede = 'S02' WHERE numero = 'OS' || TO_CHAR(CURRENT_DATE, '
 
 -- Disparador: no se pueden eliminar los servicios en proceso
 DELETE FROM SERVICIOS WHERE numero = 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000001';
+
+-- FK: el tecnico de un detalle de orden debe ser un tecnico existente
+INSERT INTO DETALLE_ORDENES (item, valor_cobrado, estado, fecha_inicio, fecha_fin, catalogo_servicio, servicio, tecnico, horas_trabajadas) VALUES
+    (2, 150000.00, 'E', CURRENT_DATE, NULL, 'CS01', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000001', '9999999999', NULL);
 */
 
 --XPoblar
@@ -837,7 +832,6 @@ DELETE FROM TRASLADOS;
 DELETE FROM INVENTARIO;
 DELETE FROM REPUESTOS;
 DELETE FROM GARANTIAS;
-DELETE FROM TRABAJA;
 DELETE FROM DETALLE_ORDENES;
 -- tg_2_SERVICIOS_bd impide borrar servicios, se desactiva solo durante la limpieza
 ALTER TABLE SERVICIOS DISABLE TRIGGER tg_2_SERVICIOS_bd;
@@ -918,11 +912,10 @@ SELECT  s.numero,
         s.vehiculo AS placa,
         cs.nombre AS servicio,
         d.estado
-FROM TRABAJA t
-JOIN DETALLE_ORDENES d ON d.id = t.detalle_orden
+FROM DETALLE_ORDENES d
 JOIN SERVICIOS s ON s.numero = d.servicio
 JOIN CATALOGO_SERVICIOS cs ON cs.codigo = d.catalogo_servicio
-WHERE t.tecnico = '2020202020' AND d.fecha_fin BETWEEN DATE '2026-01-01' AND DATE '2026-12-31'
+WHERE d.tecnico = '2020202020' AND d.fecha_fin BETWEEN DATE '2026-01-01' AND DATE '2026-12-31'
 ORDER BY d.fecha_fin DESC;
 
     -- Tecnicos sin servicio asignado
@@ -934,10 +927,10 @@ SELECT  p.cedula AS cedulaTecnico,
 FROM TECNICOS t 
 JOIN EMPLEADOS e ON t.empleado = e.persona
 JOIN PERSONAS p ON e.persona = p.cedula
-WHERE t.empleado NOT IN (
-    SELECT tra.tecnico
-    FROM TRABAJA tra, DETALLE_ORDENES det
-    WHERE tra.detalle_orden = det.id AND det.estado = 'E'
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM DETALLE_ORDENES det
+    WHERE det.tecnico = t.empleado AND det.estado = 'E'
 )
 ORDER BY  t.especialidad ASC, p.nombre ASC;
 
@@ -974,7 +967,8 @@ SELECT  g.numero,
         g.fecha_inicio, 
         g.condiciones
 FROM GARANTIAS g, VEHICULOS v, CATALOGO_SERVICIOS cat, DETALLE_ORDENES det, SERVICIOS s
-WHERE g.detalle_orden = det.id 
+WHERE g.servicio = det.servicio 
+    AND g.item = det.item 
     AND v.placa = s.vehiculo 
     AND det.catalogo_servicio = cat.codigo 
     AND det.servicio = s.numero 
