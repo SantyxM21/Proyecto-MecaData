@@ -201,6 +201,9 @@ CREATE TABLE PAGOS(
 );
 
 --Atributos
+ALTER TABLE AUTOMOVILES ADD CONSTRAINT CK_AUTOMOVILES_NUMERO_PUERTAS
+    CHECK (numero_puertas > 0);
+
 ALTER TABLE VEHICULOS ADD CONSTRAINT CK_VEHICULOS_KILOMETRAJE
     CHECK (kilometraje >= 0);
 
@@ -508,7 +511,7 @@ DROP DOMAIN IF EXISTS T_NUMERO_ORDEN;
 
 
 --DISPARADOERS
--
+
     --Valores por omision
 ALTER TABLE SERVICIOS ALTER COLUMN fecha_inicio SET DEFAULT CURRENT_DATE;
 ALTER TABLE SERVICIOS ALTER COLUMN estado SET DEFAULT 'E'; --E: En proceso
@@ -541,7 +544,7 @@ CREATE TRIGGER tg_1_SERVICIOS_bi
 
 
     --Modificar
---Los datos de los servicios finalizados o cancelados no se pueden modificar. 
+--Los datos de los servicios finalizados o cancelados no se pueden modificar y la fecha de inicio no puede quedar en el futuro.
 CREATE OR REPLACE FUNCTION fc_tg_1_SERVICIOS_bu() RETURNS TRIGGER AS
 $$
 BEGIN
@@ -551,6 +554,10 @@ BEGIN
 
     IF OLD.estado = 'C' THEN
         RAISE EXCEPTION 'No se pueden modificar los servicios cancelados';
+    END IF;
+
+    IF NEW.fecha_inicio > CURRENT_DATE THEN
+        RAISE EXCEPTION 'La fecha de inicio del servicio no puede ser futura';
     END IF;
 
     RETURN NEW;
@@ -671,29 +678,28 @@ INSERT INTO REPUESTOS (serie, tipo, nombre) VALUES
     ('R001', 'Filtro', 'Filtro de aceite'),
     ('R002', 'Freno', 'Pastillas de freno');
 
-INSERT INTO SERVICIOS (vehiculo, sede) VALUES ('ABC123', 'S01');
-INSERT INTO SERVICIOS (vehiculo, sede) VALUES ('DEF456', 'S01');
-INSERT INTO SERVICIOS (vehiculo, sede) VALUES ('GHI789', 'S02');
-INSERT INTO SERVICIOS (vehiculo, sede) VALUES ('GHI789', 'S02');
+INSERT INTO SERVICIOS (numero, fecha_inicio, fecha_fin, estado, vehiculo, sede) VALUES
+    ('OS26-00000001', '2026-11-03', NULL, 'E', 'ABC123', 'S01'),
+    ('OS26-00000002', '2026-09-14', '2026-09-15', 'F', 'DEF456', 'S01'),
+    ('OS26-00000003', '2026-10-05', '2026-10-06', 'F', 'GHI789', 'S02'),
+    ('OS26-00000004', '2026-10-20', NULL, 'C', 'GHI789', 'S02');
+
+SELECT setval('SQ_SERVICIOS_numero',
+              (SELECT COALESCE(MAX(SPLIT_PART(numero, '-', 2)::INTEGER), 0) + 1 FROM SERVICIOS), false);
 
 INSERT INTO DETALLE_ORDENES (item, valor_cobrado, estado, fecha_inicio, fecha_fin, catalogo_servicio, servicio, tecnico, horas_trabajadas) VALUES
-    (1, 160000.00, 'E', CURRENT_DATE, NULL, 'CS01', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000001', '2020202020', 1.5),
-    (1, 220000.00, 'E', CURRENT_DATE, NULL, 'CS02', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000002', '2020202020', 2),
-    (1, 230000.00, 'E', CURRENT_DATE, NULL, 'CS02', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000003', '6060606060', 2.5);
+    (1, 160000.00, 'E', '2026-11-03', NULL, 'CS01', 'OS26-00000001', '2020202020', 1.5),
+    (1, 220000.00, 'F', '2026-09-14', '2026-09-15', 'CS02', 'OS26-00000002', '2020202020', 2),
+    (1, 230000.00, 'F', '2026-10-05', '2026-10-06', 'CS02', 'OS26-00000003', '6060606060', 2.5);
 
 INSERT INTO CONSUMOS (cantidad, fecha_uso, precio, repuesto, servicio, item) VALUES
-    (1, CURRENT_DATE, 25000.00, 'R001', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000001', 1),
-    (2, CURRENT_DATE, 60000.00, 'R002', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000002', 1),
-    (2, CURRENT_DATE, 62000.00, 'R002', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000003', 1);
-
-UPDATE DETALLE_ORDENES SET estado = 'F', fecha_fin = CURRENT_DATE WHERE item = 1 AND servicio IN ('OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000002', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000003');
-UPDATE SERVICIOS SET estado = 'F' WHERE numero = 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000002';
-UPDATE SERVICIOS SET estado = 'F' WHERE numero = 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000003';
-UPDATE SERVICIOS SET estado = 'C' WHERE numero = 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000004';
+    (1, '2026-11-03', 25000.00, 'R001', 'OS26-00000001', 1),
+    (2, '2026-09-14', 60000.00, 'R002', 'OS26-00000002', 1),
+    (2, '2026-10-05', 62000.00, 'R002', 'OS26-00000003', 1);
 
 INSERT INTO GARANTIAS (numero, fecha_inicio, fecha_fin, condiciones, estado, servicio, item) VALUES
-    ('G01', CURRENT_DATE, CAST(CURRENT_DATE + INTERVAL '6 months' AS DATE), 'Cubre desgaste prematuro de pastillas durante 6 meses', 'V', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000002', 1),
-    ('G02', CURRENT_DATE, CAST(CURRENT_DATE + INTERVAL '3 months' AS DATE), 'Cubre ruidos en el sistema de frenos durante 3 meses', 'V', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000003', 1);
+    ('G01', '2026-09-15', '2027-03-15', 'Cubre desgaste prematuro de pastillas durante 6 meses', 'V', 'OS26-00000002', 1),
+    ('G02', '2026-10-06', '2027-01-06', 'Cubre ruidos en el sistema de frenos durante 3 meses', 'V', 'OS26-00000003', 1);
 
 INSERT INTO TRASLADOS (numero, cantidad, fecha, detalle, sede_llega, sede_sale, repuesto) VALUES
     ('TR01', 5, '2024-04-01', 'Reposicion de filtros', 'S02', 'S01', 'R001');
@@ -708,25 +714,29 @@ INSERT INTO SUMINISTROS (precio_referencia, proveedor, repuesto) VALUES
 
 INSERT INTO COMPRAS (numero, fecha, sede, proveedor) VALUES
     ('C01', '2024-03-20', 'S01', '900123456'),
-    ('C02', '2025-02-11', 'S02', '900654321');
+    ('C02', '2025-02-11', 'S02', '900654321'),
+    ('C03', '2026-08-20', 'S01', '900654321');
 
 INSERT INTO DETALLE_COMPRAS (id, cantidad, precio_unidad, compra, repuesto) VALUES
     ('DC01', 30, 20000.00, 'C01', 'R001'),
-    ('DC02', 10, 45000.00, 'C02', 'R002');
+    ('DC02', 10, 45000.00, 'C02', 'R002'),
+    ('DC03', 10, 45000.00, 'C03', 'R002');
 
 INSERT INTO MOVIMIENTOS (numero, fecha, valor, descripcion, estado) VALUES
-    ('M01', CURRENT_DATE, 280000.00, 'Cobro orden de servicio DEF456', 'P'),
+    ('M01', '2026-09-15', 340000.00, 'Cobro orden de servicio DEF456', 'P'),
     ('M02', '2024-03-25', 600000.00, 'Pago compra C01', 'P'),
-    ('M03', CURRENT_DATE, 354000.00, 'Cobro orden de servicio GHI789', 'P'),
-    ('M04', '2025-02-15', 450000.00, 'Pago compra C02', 'P');
+    ('M03', '2026-10-06', 354000.00, 'Cobro orden de servicio GHI789', 'P'),
+    ('M04', '2025-02-15', 450000.00, 'Pago compra C02', 'P'),
+    ('M05', '2026-08-25', 450000.00, 'Pago compra C03', 'P');
 
 INSERT INTO COBROS (movimiento, medio_pago, fecha_expedido, orden) VALUES
-    ('M01', 'T', CURRENT_DATE, 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000002'),
-    ('M03', 'E', CURRENT_DATE, 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000003');
+    ('M01', 'T', '2026-09-15', 'OS26-00000002'),
+    ('M03', 'E', '2026-10-06', 'OS26-00000003');
 
 INSERT INTO PAGOS (movimiento, fecha_pago, compra) VALUES
     ('M02', '2024-03-25', 'C01'),
-    ('M04', '2025-02-15', 'C02');
+    ('M04', '2025-02-15', 'C02'),
+    ('M05', '2026-08-25', 'C03');
 
 
 --PoblarNoOK
@@ -737,7 +747,7 @@ INSERT INTO VEHICULOS (placa, kilometraje, marca, modelo, cilindraje, color, cli
 
 -- Nulidad: toda persona debe tener nombre
 INSERT INTO PERSONAS (cedula, nombre, apellido, correo, telefono) VALUES
-    ('3030303030', NULL, 'Rojas', 'sin.nombre@mail.com', '3201112233');
+    ('4040404040', NULL, 'Rojas', 'sin.nombre@mail.com', '3201112233');
 
 -- PK: no puede haber dos personas con la misma cedula
 INSERT INTO PERSONAS (cedula, nombre, apellido, correo, telefono) VALUES
@@ -753,54 +763,28 @@ INSERT INTO VEHICULOS (placa, kilometraje, marca, modelo, cilindraje, color, cli
 
 -- Dominio: el numero de orden debe tener formato OSAA-########
 INSERT INTO SERVICIOS (numero, fecha_inicio, fecha_fin, estado, vehiculo, sede) VALUES
-    ('ORDEN1', '2024-06-01', NULL, 'E', 'ABC123', 'S01');
+    ('ORDEN1', '2026-06-01', NULL, 'E', 'ABC123', 'S01');
 
 -- Dominio: estado de orden solo acepta F, E o C
 INSERT INTO SERVICIOS (numero, fecha_inicio, fecha_fin, estado, vehiculo, sede) VALUES
-    ('OS24-00000002', '2024-06-01', NULL, 'Z', 'ABC123', 'S01');
-
--- Disparador: no se pueden modificar los servicios finalizados
-UPDATE SERVICIOS SET sede = 'S02' WHERE numero = 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000002';
-
--- Disparador: no se pueden eliminar los servicios en proceso
-DELETE FROM SERVICIOS WHERE numero = 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000001';
+    ('OS26-00000099', '2026-06-01', NULL, 'Z', 'ABC123', 'S01');
 
 -- FK: el tecnico de un detalle de orden debe ser un tecnico existente
 INSERT INTO DETALLE_ORDENES (item, valor_cobrado, estado, fecha_inicio, fecha_fin, catalogo_servicio, servicio, tecnico, horas_trabajadas) VALUES
-    (2, 150000.00, 'E', CURRENT_DATE, NULL, 'CS01', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000001', '9999999999', NULL);
+    (2, 150000.00, 'E', '2026-11-03', NULL, 'CS01', 'OS26-00000001', '9999999999', NULL);
 
 -- Nulidad: toda garantia debe tener fecha de fin
 INSERT INTO GARANTIAS (numero, fecha_inicio, fecha_fin, condiciones, estado, servicio, item) VALUES
-    ('G04', '2026-06-01', NULL, 'Sin fecha de fin', 'V', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000001', 1);
+    ('G04', '2026-06-01', NULL, 'Sin fecha de fin', 'V', 'OS26-00000001', 1);
 */
 
 --XPoblar
 /*
-DELETE FROM PAGOS;
-DELETE FROM COBROS;
-DELETE FROM MOVIMIENTOS;
-DELETE FROM DETALLE_COMPRAS;
-DELETE FROM COMPRAS;
-DELETE FROM SUMINISTROS;
-DELETE FROM PROVEEDORES;
-DELETE FROM CONSUMOS;
-DELETE FROM TRASLADOS;
-DELETE FROM REPUESTOS;
-DELETE FROM GARANTIAS;
-DELETE FROM DETALLE_ORDENES;
--- tg_2_SERVICIOS_bd impide borrar servicios, se desactiva solo durante la limpieza
-ALTER TABLE SERVICIOS DISABLE TRIGGER tg_2_SERVICIOS_bd;
-DELETE FROM SERVICIOS;
-ALTER TABLE SERVICIOS ENABLE TRIGGER tg_2_SERVICIOS_bd;
-DELETE FROM OFERTAS_SERVICIOS;
-DELETE FROM CATALOGO_SERVICIOS;
-DELETE FROM TECNICOS;
-DELETE FROM EMPLEADOS;
-DELETE FROM SEDES;
-DELETE FROM AUTOMOVILES;
-DELETE FROM VEHICULOS;
-DELETE FROM CLIENTES;
-DELETE FROM PERSONAS;
+TRUNCATE TABLE PAGOS, COBROS, MOVIMIENTOS, DETALLE_COMPRAS, COMPRAS, SUMINISTROS, PROVEEDORES,
+               CONSUMOS, TRASLADOS, REPUESTOS, GARANTIAS, DETALLE_ORDENES, SERVICIOS,
+               OFERTAS_SERVICIOS, CATALOGO_SERVICIOS, TECNICOS, EMPLEADOS, SEDES,
+               AUTOMOVILES, VEHICULOS, CLIENTES, PERSONAS
+    RESTART IDENTITY;
 */
 
 -- Consultas
