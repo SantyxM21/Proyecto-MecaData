@@ -124,12 +124,6 @@ CREATE TABLE SEDES(
     telefono T_TELEFONO NOT NULL
 );
 
-CREATE TABLE INVENTARIO(
-    cantidad INTEGER NOT NULL,
-    sede VARCHAR(5) NOT NULL,
-    repuesto VARCHAR(20) NOT NULL
-);
-
 CREATE TABLE REPUESTOS(
     serie VARCHAR(20) NOT NULL,
     tipo VARCHAR(30) NOT NULL, 
@@ -230,9 +224,6 @@ ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT CK_DETALLE_ORDENES_ITEM
 ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT CK_DETALLE_ORDENES_HORAS_TRABAJADAS
     CHECK (horas_trabajadas > 0);
 
-ALTER TABLE INVENTARIO ADD CONSTRAINT CK_INVENTARIO_CANTIDAD
-    CHECK (cantidad >= 0);
-
 ALTER TABLE TRASLADOS ADD CONSTRAINT CK_TRASLADOS_CANTIDAD
     CHECK (cantidad > 0);
 
@@ -278,9 +269,6 @@ ALTER TABLE PRESTA ADD CONSTRAINT PK_PRESTA
 
 ALTER TABLE SEDES ADD CONSTRAINT PK_SEDES
     PRIMARY KEY (numero);
-
-ALTER TABLE INVENTARIO ADD CONSTRAINT PK_INVENTARIO
-    PRIMARY KEY (sede, repuesto);
 
 ALTER TABLE REPUESTOS ADD CONSTRAINT PK_REPUESTOS
     PRIMARY KEY (serie);
@@ -394,14 +382,6 @@ ALTER TABLE PRESTA ADD CONSTRAINT FK_PRESTA_SEDE
     FOREIGN KEY (sede) REFERENCES SEDES(numero)
     ON DELETE RESTRICT;
 
-ALTER TABLE INVENTARIO ADD CONSTRAINT FK_INVENTARIO_SEDE
-    FOREIGN KEY (sede) REFERENCES SEDES(numero)
-    ON DELETE RESTRICT;
-
-ALTER TABLE INVENTARIO ADD CONSTRAINT FK_INVENTARIO_REPUESTO
-    FOREIGN KEY (repuesto) REFERENCES REPUESTOS(serie)
-    ON DELETE RESTRICT;
-
 ALTER TABLE TRASLADOS ADD CONSTRAINT FK_TRASLADOS_SEDE_LLEGA
     FOREIGN KEY (sede_llega) REFERENCES SEDES(numero)
     ON DELETE RESTRICT;
@@ -495,7 +475,6 @@ DROP TABLE IF EXISTS COMPRAS;
 DROP TABLE IF EXISTS SUMINISTRA;
 DROP TABLE IF EXISTS CONSUMO_REPUESTO;
 DROP TABLE IF EXISTS TRASLADOS;
-DROP TABLE IF EXISTS INVENTARIO;
 DROP TABLE IF EXISTS GARANTIAS;
 DROP TABLE IF EXISTS DETALLE_ORDENES;
 DROP TABLE IF EXISTS SERVICIOS;
@@ -580,31 +559,6 @@ CREATE TRIGGER tg_1_SERVICIOS_bu
     EXECUTE FUNCTION fc_tg_1_SERVICIOS_bu();
 
 
---La cantidad en el inventario de los repuestos gastados disminuye automaticamente.
-CREATE OR REPLACE FUNCTION fc_tg_1_CONSUMO_REPUESTO_ai() RETURNS TRIGGER AS
-$$
-DECLARE
-    sede_repuesto VARCHAR(5);
-BEGIN
-    SELECT s.sede INTO sede_repuesto
-    FROM SERVICIOS s
-    WHERE s.numero = NEW.servicio;
-
-    UPDATE INVENTARIO 
-        SET cantidad = cantidad - NEW.cantidad
-        WHERE sede = sede_repuesto AND repuesto = NEW.repuesto;
-    
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER tg_1_CONSUMO_REPUESTO_ai
-    AFTER INSERT ON CONSUMO_REPUESTO
-    FOR EACH ROW
-    EXECUTE FUNCTION fc_tg_1_CONSUMO_REPUESTO_ai();
-
-
-
 --Actualizar el valor de fecha final cuando el servicio se declara finalizado
 CREATE OR REPLACE FUNCTION fc_tg_2_SERVICIOS_bu() RETURNS TRIGGER AS
 $$
@@ -644,13 +598,11 @@ CREATE TRIGGER tg_2_SERVICIOS_bd
     --XDisparadores
 -- DROP TRIGGER IF EXISTS tg_1_SERVICIOS_bi ON SERVICIOS;
 -- DROP TRIGGER IF EXISTS tg_1_SERVICIOS_bu ON SERVICIOS;
--- DROP TRIGGER IF EXISTS tg_1_CONSUMO_REPUESTO_ai ON CONSUMO_REPUESTO;
 -- DROP TRIGGER IF EXISTS tg_2_SERVICIOS_bu ON SERVICIOS;
 -- DROP TRIGGER IF EXISTS tg_2_SERVICIOS_bd ON SERVICIOS;
 
 -- DROP FUNCTION IF EXISTS fc_tg_1_SERVICIOS_bi();
 -- DROP FUNCTION IF EXISTS fc_tg_1_SERVICIOS_bu();
--- DROP FUNCTION IF EXISTS fc_tg_1_CONSUMO_REPUESTO_ai();
 -- DROP FUNCTION IF EXISTS fc_tg_2_SERVICIOS_bu();
 -- DROP FUNCTION IF EXISTS fc_tg_2_SERVICIOS_bd();
 
@@ -708,12 +660,6 @@ INSERT INTO PRESTA (disponible, precio_local, catalogo_servicio, sede) VALUES
 INSERT INTO REPUESTOS (serie, tipo, nombre) VALUES
     ('R001', 'Filtro', 'Filtro de aceite'),
     ('R002', 'Freno', 'Pastillas de freno');
-
-INSERT INTO INVENTARIO (cantidad, sede, repuesto) VALUES
-    (20, 'S01', 'R001'),
-    (10, 'S01', 'R002'),
-    (8, 'S02', 'R001'),
-    (6, 'S02', 'R002');
 
 INSERT INTO SERVICIOS (vehiculo, sede) VALUES ('ABC123', 'S01');
 INSERT INTO SERVICIOS (vehiculo, sede) VALUES ('DEF456', 'S01');
@@ -803,10 +749,6 @@ INSERT INTO SERVICIOS (numero, fecha_inicio, fecha_fin, estado, vehiculo, sede) 
 INSERT INTO SERVICIOS (numero, fecha_inicio, fecha_fin, estado, vehiculo, sede) VALUES
     ('OS24-00000002', '2024-06-01', NULL, 'Z', 'ABC123', 'S01');
 
--- CHECK de atributo: el inventario no puede ser negativo
-INSERT INTO INVENTARIO (cantidad, sede, repuesto) VALUES
-    (-5, 'S02', 'R001');
-
 -- Disparador: no se pueden modificar los servicios finalizados
 UPDATE SERVICIOS SET sede = 'S02' WHERE numero = 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000002';
 
@@ -829,7 +771,6 @@ DELETE FROM SUMINISTRA;
 DELETE FROM PROVEEDORES;
 DELETE FROM CONSUMO_REPUESTO;
 DELETE FROM TRASLADOS;
-DELETE FROM INVENTARIO;
 DELETE FROM REPUESTOS;
 DELETE FROM GARANTIAS;
 DELETE FROM DETALLE_ORDENES;
@@ -895,16 +836,16 @@ WHERE e.persona = '5050505050' AND e.cargo = 'A' AND p.disponible = TRUE
 ORDER BY cs.nombre;
 
     -- Consultar cantidad de un repuesto
-SELECT  r.serie,
-        r.nombre,
-        se.numero AS sede,
-        se.nombre AS nombreSede,
-        i.cantidad
-FROM INVENTARIO i
-JOIN REPUESTOS r ON r.serie = i.repuesto
-JOIN SEDES se ON se.numero = i.sede
-WHERE r.nombre = 'Filtro de aceite'
-ORDER BY i.cantidad ASC;
+-- SELECT  r.serie,
+--         r.nombre,
+--         se.numero AS sede,
+--         se.nombre AS nombreSede,
+--         i.cantidad
+-- FROM INVENTARIO i
+-- JOIN REPUESTOS r ON r.serie = i.repuesto
+-- JOIN SEDES se ON se.numero = i.sede
+-- WHERE r.nombre = 'Filtro de aceite'
+-- ORDER BY i.cantidad ASC;
 
     -- Historial de servicios del técnico
 SELECT  s.numero,
