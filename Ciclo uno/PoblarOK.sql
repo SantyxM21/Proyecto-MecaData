@@ -29,12 +29,13 @@ INSERT INTO SEDES (numero, nombre, direccion, telefono) VALUES
 INSERT INTO EMPLEADOS (cargo, fecha_ingreso, salario, persona, sede) VALUES
     ('T', '2023-03-01', 3500000.00, '2020202020', 'S01'),
     ('G', '2021-01-10', 8000000.00, '3030303030', 'S01'),
-    ('A', '2022-05-16', 4200000.00, '5050505050', 'S01'),
+    ('T', '2022-05-16', 4200000.00, '5050505050', 'S01'),
     ('T', '2024-02-01', 3300000.00, '6060606060', 'S02'),
     ('G', '2020-08-03', 7800000.00, '8080808080', 'S02');
 
 INSERT INTO TECNICOS (especialidad, empleado) VALUES
     ('Motor', '2020202020'),
+    ('Alineacion', '5050505050'),
     ('Frenos', '6060606060');
 
 INSERT INTO CATALOGO_SERVICIOS (codigo, nombre, descripcion, precio_base, tiempo_medio) VALUES
@@ -42,7 +43,7 @@ INSERT INTO CATALOGO_SERVICIOS (codigo, nombre, descripcion, precio_base, tiempo
     ('CS02', 'Revision de frenos', 'Revision y cambio de pastillas de freno', 220000.00, 2),
     ('CS03', 'Alineacion y balanceo', 'Alineacion de direccion y balanceo de llantas', 90000.00, 1);
 
-INSERT INTO PRESTA (disponible, precio_local, catalogo_servicio, sede) VALUES
+INSERT INTO OFERTAS_SERVICIOS (habilitado, precio_local, catalogo_servicio, sede) VALUES
     (TRUE, 160000.00, 'CS01', 'S01'),
     (TRUE, NULL, 'CS02', 'S01'),
     (FALSE, 95000.00, 'CS03', 'S01'),
@@ -53,40 +54,28 @@ INSERT INTO REPUESTOS (serie, tipo, nombre) VALUES
     ('R001', 'Filtro', 'Filtro de aceite'),
     ('R002', 'Freno', 'Pastillas de freno');
 
-INSERT INTO INVENTARIO (cantidad, sede, repuesto) VALUES
-    (20, 'S01', 'R001'),
-    (10, 'S01', 'R002'),
-    (8, 'S02', 'R001'),
-    (6, 'S02', 'R002');
+INSERT INTO SERVICIOS (numero, fecha_inicio, fecha_fin, estado, vehiculo, sede) VALUES
+    ('OS26-00000001', '2026-11-03', NULL, 'E', 'ABC123', 'S01'),
+    ('OS26-00000002', '2026-09-14', '2026-09-15', 'F', 'DEF456', 'S01'),
+    ('OS26-00000003', '2026-10-05', '2026-10-06', 'F', 'GHI789', 'S02'),
+    ('OS26-00000004', '2026-10-20', NULL, 'C', 'GHI789', 'S02');
 
-INSERT INTO SERVICIOS (vehiculo, sede) VALUES ('ABC123', 'S01');
-INSERT INTO SERVICIOS (vehiculo, sede) VALUES ('DEF456', 'S01');
-INSERT INTO SERVICIOS (vehiculo, sede) VALUES ('GHI789', 'S02');
-INSERT INTO SERVICIOS (vehiculo, sede) VALUES ('GHI789', 'S02');
+SELECT setval('SQ_SERVICIOS_numero',
+              (SELECT COALESCE(MAX(SPLIT_PART(numero, '-', 2)::INTEGER), 0) + 1 FROM SERVICIOS), false);
 
-INSERT INTO DETALLE_ORDENES (id, valor_cobrado, estado, fecha_inicio, fecha_fin, catalogo_servicio, servicio) VALUES
-    ('DO01', 160000.00, 'E', CURRENT_DATE, NULL, 'CS01', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000001'),
-    ('DO02', 220000.00, 'E', CURRENT_DATE, NULL, 'CS02', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000002'),
-    ('DO03', 230000.00, 'E', CURRENT_DATE, NULL, 'CS02', 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000003');
+INSERT INTO DETALLE_ORDENES (item, valor_cobrado, estado, fecha_inicio, fecha_fin, catalogo_servicio, servicio, tecnico, horas_trabajadas) VALUES
+    (1, 160000.00, 'E', '2026-11-03', NULL, 'CS01', 'OS26-00000001', '2020202020', 1.5),
+    (1, 220000.00, 'F', '2026-09-14', '2026-09-15', 'CS02', 'OS26-00000002', '2020202020', 2),
+    (1, 230000.00, 'F', '2026-10-05', '2026-10-06', 'CS02', 'OS26-00000003', '6060606060', 2.5);
 
-INSERT INTO TRABAJA (horas_trabajadas, tecnico, detalle_orden) VALUES
-    (1.5, '2020202020', 'DO01'),
-    (2, '2020202020', 'DO02'),
-    (2.5, '6060606060', 'DO03');
+INSERT INTO CONSUMOS (cantidad, fecha_uso, precio, repuesto, servicio, item) VALUES
+    (1, '2026-11-03', 25000.00, 'R001', 'OS26-00000001', 1),
+    (2, '2026-09-14', 60000.00, 'R002', 'OS26-00000002', 1),
+    (2, '2026-10-05', 62000.00, 'R002', 'OS26-00000003', 1);
 
-INSERT INTO CONSUMO_REPUESTO (cantidad, fecha_uso, precio, repuesto, detalle_orden) VALUES
-    (1, CURRENT_DATE, 25000.00, 'R001', 'DO01'),
-    (2, CURRENT_DATE, 60000.00, 'R002', 'DO02'),
-    (2, CURRENT_DATE, 62000.00, 'R002', 'DO03');
-
-UPDATE DETALLE_ORDENES SET estado = 'F', fecha_fin = CURRENT_DATE WHERE id IN ('DO02', 'DO03');
-UPDATE SERVICIOS SET estado = 'F' WHERE numero = 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000002';
-UPDATE SERVICIOS SET estado = 'F' WHERE numero = 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000003';
-UPDATE SERVICIOS SET estado = 'C' WHERE numero = 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000004';
-
-INSERT INTO GARANTIAS (numero, fecha_inicio, condiciones, estado, detalle_orden) VALUES
-    ('G01', CURRENT_DATE, 'Cubre desgaste prematuro de pastillas durante 6 meses', 'V', 'DO02'),
-    ('G02', CURRENT_DATE, 'Cubre ruidos en el sistema de frenos durante 3 meses', 'V', 'DO03');
+INSERT INTO GARANTIAS (numero, fecha_inicio, fecha_fin, condiciones, estado, servicio, item) VALUES
+    ('G01', '2026-09-15', '2027-03-15', 'Cubre desgaste prematuro de pastillas durante 6 meses', 'V', 'OS26-00000002', 1),
+    ('G02', '2026-10-06', '2027-01-06', 'Cubre ruidos en el sistema de frenos durante 3 meses', 'V', 'OS26-00000003', 1);
 
 INSERT INTO TRASLADOS (numero, cantidad, fecha, detalle, sede_llega, sede_sale, repuesto) VALUES
     ('TR01', 5, '2024-04-01', 'Reposicion de filtros', 'S02', 'S01', 'R001');
@@ -95,28 +84,32 @@ INSERT INTO PROVEEDORES (nit, correo, numero_contacto, representante, nombre) VA
     ('900123456', 'ventas@repuestos.com', '6015550000', 'Carlos Ruiz', 'Repuestos SAS'),
     ('900654321', 'contacto@frenosya.com', '6015551111', 'Marta Diaz', 'Frenos Ya LTDA');
 
-INSERT INTO SUMINISTRA (precio_referencia, proveedor, repuesto) VALUES
+INSERT INTO SUMINISTROS (precio_referencia, proveedor, repuesto) VALUES
     (20000.00, '900123456', 'R001'),
     (45000.00, '900654321', 'R002');
 
 INSERT INTO COMPRAS (numero, fecha, sede, proveedor) VALUES
     ('C01', '2024-03-20', 'S01', '900123456'),
-    ('C02', '2025-02-11', 'S02', '900654321');
+    ('C02', '2025-02-11', 'S02', '900654321'),
+    ('C03', '2026-08-20', 'S01', '900654321');
 
 INSERT INTO DETALLE_COMPRAS (id, cantidad, precio_unidad, compra, repuesto) VALUES
     ('DC01', 30, 20000.00, 'C01', 'R001'),
-    ('DC02', 10, 45000.00, 'C02', 'R002');
+    ('DC02', 10, 45000.00, 'C02', 'R002'),
+    ('DC03', 10, 45000.00, 'C03', 'R002');
 
 INSERT INTO MOVIMIENTOS (numero, fecha, valor, descripcion, estado) VALUES
-    ('M01', CURRENT_DATE, 280000.00, 'Cobro orden de servicio DEF456', 'P'),
+    ('M01', '2026-09-15', 340000.00, 'Cobro orden de servicio DEF456', 'P'),
     ('M02', '2024-03-25', 600000.00, 'Pago compra C01', 'P'),
-    ('M03', CURRENT_DATE, 354000.00, 'Cobro orden de servicio GHI789', 'P'),
-    ('M04', '2025-02-15', 450000.00, 'Pago compra C02', 'P');
+    ('M03', '2026-10-06', 354000.00, 'Cobro orden de servicio GHI789', 'P'),
+    ('M04', '2025-02-15', 450000.00, 'Pago compra C02', 'P'),
+    ('M05', '2026-08-25', 450000.00, 'Pago compra C03', 'P');
 
 INSERT INTO COBROS (movimiento, medio_pago, fecha_expedido, orden) VALUES
-    ('M01', 'T', CURRENT_DATE, 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000002'),
-    ('M03', 'E', CURRENT_DATE, 'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-00000003');
+    ('M01', 'T', '2026-09-15', 'OS26-00000002'),
+    ('M03', 'E', '2026-10-06', 'OS26-00000003');
 
 INSERT INTO PAGOS (movimiento, fecha_pago, compra) VALUES
     ('M02', '2024-03-25', 'C01'),
-    ('M04', '2025-02-15', 'C02');
+    ('M04', '2025-02-15', 'C02'),
+    ('M05', '2026-08-25', 'C03');

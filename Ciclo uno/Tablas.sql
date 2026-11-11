@@ -40,28 +40,26 @@ CREATE TABLE TECNICOS(
     empleado VARCHAR(15) NOT NULL
 );
 
-CREATE TABLE TRABAJA(
-    horas_trabajadas NUMERIC NOT NULL,
-    tecnico VARCHAR(15) NOT NULL,
-    detalle_orden VARCHAR(10) NOT NULL
-);
-
 CREATE TABLE DETALLE_ORDENES(
-    id VARCHAR(10) NOT NULL,
+    item INTEGER NOT NULL,
     valor_cobrado T_MONEDA,
     estado T_ESTADO_ORDEN NOT NULL, 
     fecha_inicio DATE NOT NULL,
     fecha_fin DATE,
     catalogo_servicio VARCHAR(10) NOT NULL,
-    servicio T_NUMERO_ORDEN NOT NULL
+    servicio T_NUMERO_ORDEN NOT NULL,
+    tecnico VARCHAR(15),
+    horas_trabajadas NUMERIC
 );
 
 CREATE TABLE GARANTIAS(
     numero VARCHAR(10) NOT NULL,
     fecha_inicio DATE NOT NULL,
+    fecha_fin DATE NOT NULL,
     condiciones VARCHAR(200) NOT NULL,
     estado T_ESTADO_GARANTIA NOT NULL, 
-    detalle_orden VARCHAR(10) NOT NULL 
+    servicio T_NUMERO_ORDEN NOT NULL,
+    item INTEGER NOT NULL
 );
 
 CREATE TABLE SERVICIOS(
@@ -81,8 +79,8 @@ CREATE TABLE CATALOGO_SERVICIOS(
     tiempo_medio NUMERIC NOT NULL
 );
 
-CREATE TABLE PRESTA(
-    disponible BOOLEAN NOT NULL, 
+CREATE TABLE OFERTAS_SERVICIOS(
+    habilitado BOOLEAN NOT NULL, 
     precio_local T_MONEDA,
     catalogo_servicio VARCHAR(10) NOT NULL,
     sede VARCHAR(5) NOT NULL
@@ -93,12 +91,6 @@ CREATE TABLE SEDES(
     nombre VARCHAR(50) NOT NULL,
     direccion VARCHAR(100) NOT NULL,
     telefono T_TELEFONO NOT NULL
-);
-
-CREATE TABLE INVENTARIO(
-    cantidad INTEGER NOT NULL,
-    sede VARCHAR(5) NOT NULL,
-    repuesto VARCHAR(20) NOT NULL
 );
 
 CREATE TABLE REPUESTOS(
@@ -117,15 +109,16 @@ CREATE TABLE TRASLADOS(
     repuesto VARCHAR(20) NOT NULL
 );
 
-CREATE TABLE CONSUMO_REPUESTO(
+CREATE TABLE CONSUMOS(
     cantidad INTEGER NOT NULL,
     fecha_uso DATE NOT NULL,
     precio T_MONEDA NOT NULL,
     repuesto VARCHAR(20) NOT NULL, 
-    detalle_orden VARCHAR(10) NOT NULL
+    servicio T_NUMERO_ORDEN NOT NULL,
+    item INTEGER NOT NULL
 );
 
-CREATE TABLE SUMINISTRA(
+CREATE TABLE SUMINISTROS(
     precio_referencia T_MONEDA NOT NULL,
     proveedor VARCHAR(15) NOT NULL,
     repuesto VARCHAR(20) NOT NULL

@@ -9,7 +9,7 @@ CREATE DOMAIN T_TELEFONO AS VARCHAR(15)
     CHECK (VALUE ~ '^[0-9]{7,15}$');
 
 CREATE DOMAIN T_CARGO AS CHAR(1)
-    CHECK (VALUE IN ('G','I','T','A'));
+    CHECK (VALUE IN ('G','T'));
 
 CREATE DOMAIN T_ESTADO_ORDEN AS CHAR(1)
     CHECK (VALUE IN ('F','E','C'));
@@ -654,12 +654,13 @@ INSERT INTO SEDES (numero, nombre, direccion, telefono) VALUES
 INSERT INTO EMPLEADOS (cargo, fecha_ingreso, salario, persona, sede) VALUES
     ('T', '2023-03-01', 3500000.00, '2020202020', 'S01'),
     ('G', '2021-01-10', 8000000.00, '3030303030', 'S01'),
-    ('A', '2022-05-16', 4200000.00, '5050505050', 'S01'),
+    ('T', '2022-05-16', 4200000.00, '5050505050', 'S01'),
     ('T', '2024-02-01', 3300000.00, '6060606060', 'S02'),
     ('G', '2020-08-03', 7800000.00, '8080808080', 'S02');
 
 INSERT INTO TECNICOS (especialidad, empleado) VALUES
     ('Motor', '2020202020'),
+    ('Alineacion', '5050505050'),
     ('Frenos', '6060606060');
 
 INSERT INTO CATALOGO_SERVICIOS (codigo, nombre, descripcion, precio_base, tiempo_medio) VALUES

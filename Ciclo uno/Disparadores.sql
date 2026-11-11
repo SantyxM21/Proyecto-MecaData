@@ -1,23 +1,24 @@
 -- MecaData Disparadores
+    --Valores por omision
+ALTER TABLE SERVICIOS ALTER COLUMN fecha_inicio SET DEFAULT CURRENT_DATE;
+ALTER TABLE SERVICIOS ALTER COLUMN estado SET DEFAULT 'E'; --E: En proceso
+
+--Consecutivo del numero de la orden (OSAA-########) con secuencia.
+CREATE SEQUENCE SQ_SERVICIOS_numero OWNED BY SERVICIOS.numero;
+SELECT setval('SQ_SERVICIOS_numero',
+                (SELECT COALESCE(MAX(SPLIT_PART(numero, '-', 2)::INTEGER), 0) + 1 FROM SERVICIOS), false);
+ALTER TABLE SERVICIOS ALTER COLUMN numero SET DEFAULT
+    'OS' || TO_CHAR(CURRENT_DATE, 'YY') || '-' || LPAD(nextval('SQ_SERVICIOS_numero')::TEXT, 8, '0');
+
     --Adicionar
 
---Al crear un servicio, se coloca automáticamente su numero, fecha de inicio y estado (En proceso).
+--Al crear un servicio, su fecha de inicio no puede ser futura.
 CREATE OR REPLACE FUNCTION fc_tg_1_SERVICIOS_bi() RETURNS TRIGGER AS
 $$
-DECLARE
-    consecutivo_id INTEGER;
-    anno_actual CHAR(2);
 BEGIN
-    --Consecutivo
-    SELECT COALESCE(MAX(SPLIT_PART(numero, '-', 2)::INTEGER), 0) + 1 INTO consecutivo_id FROM SERVICIOS;
-    SELECT TO_CHAR(NOW(), 'YY') INTO anno_actual;
-    NEW.numero := 'OS' || anno_actual || '-' || LPAD(consecutivo_id::TEXT, 8, '0');
-
-    --fecha actual
-    NEW.fecha_inicio := CAST(NOW() AS DATE);
-
-    --estado inicial 
-    NEW.estado := 'E';
+    IF NEW.fecha_inicio > CURRENT_DATE THEN
+        RAISE EXCEPTION 'La fecha de inicio del servicio no puede ser futura';
+    END IF;
 
     RETURN NEW;
 END;
@@ -28,8 +29,9 @@ CREATE TRIGGER tg_1_SERVICIOS_bi
     FOR EACH ROW
     EXECUTE FUNCTION fc_tg_1_SERVICIOS_bi();
 
+
     --Modificar
---Los datos de los servicios finalizados o cancelados no se pueden modificar. 
+--Los datos de los servicios finalizados o cancelados no se pueden modificar y la fecha de inicio no puede quedar en el futuro.
 CREATE OR REPLACE FUNCTION fc_tg_1_SERVICIOS_bu() RETURNS TRIGGER AS
 $$
 BEGIN
@@ -41,6 +43,10 @@ BEGIN
         RAISE EXCEPTION 'No se pueden modificar los servicios cancelados';
     END IF;
 
+    IF NEW.fecha_inicio > CURRENT_DATE THEN
+        RAISE EXCEPTION 'La fecha de inicio del servicio no puede ser futura';
+    END IF;
+
     RETURN NEW;
 
 END;
@@ -50,31 +56,6 @@ CREATE TRIGGER tg_1_SERVICIOS_bu
     BEFORE UPDATE ON SERVICIOS 
     FOR EACH ROW
     EXECUTE FUNCTION fc_tg_1_SERVICIOS_bu();
-
-
---La cantidad en el inventario de los repuestos gastados disminuye automaticamente.
-CREATE OR REPLACE FUNCTION fc_tg_1_CONSUMO_REPUESTO_ai() RETURNS TRIGGER AS
-$$
-DECLARE
-    sede_repuesto VARCHAR(5);
-BEGIN
-    SELECT s.sede INTO sede_repuesto
-    FROM DETALLE_ORDENES d, SERVICIOS s
-    WHERE s.numero = d.servicio AND d.id = NEW.detalle_orden;
-
-    UPDATE INVENTARIO 
-        SET cantidad = cantidad - NEW.cantidad
-        WHERE sede = sede_repuesto AND repuesto = NEW.repuesto;
-    
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER tg_1_CONSUMO_REPUESTO_ai
-    AFTER INSERT ON CONSUMO_REPUESTO
-    FOR EACH ROW
-    EXECUTE FUNCTION fc_tg_1_CONSUMO_REPUESTO_ai();
-
 
 
 --Actualizar el valor de fecha final cuando el servicio se declara finalizado

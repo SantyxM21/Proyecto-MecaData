@@ -1,4 +1,5 @@
 -- MecaData Consultas
+-- Consultas gerenciales
     -- Clientes que mas han gastado en el negocio 
 SELECT  p.cedula,
         p.nombre,
@@ -17,6 +18,7 @@ ORDER BY totalCobrado DESC;
 
 
 
+-- Consultas operativas
     -- Servicios en proceso 
 SELECT  s.numero,
         s.vehiculo AS placa,
@@ -36,22 +38,22 @@ SELECT  cs.codigo,
         COALESCE(p.precio_local, cs.precio_base) AS precio,
         cs.tiempo_medio
 FROM EMPLEADOS e
-JOIN PRESTA p ON p.sede = e.sede
+JOIN OFERTAS_SERVICIOS p ON p.sede = e.sede
 JOIN CATALOGO_SERVICIOS cs ON cs.codigo = p.catalogo_servicio
-WHERE e.persona = '5050505050' AND e.cargo = 'A' AND p.disponible = TRUE
+WHERE e.persona = '5050505050' AND e.cargo = 'A' AND p.habilitado = TRUE
 ORDER BY cs.nombre;
 
     -- Consultar cantidad de un repuesto
-SELECT  r.serie,
-        r.nombre,
-        se.numero AS sede,
-        se.nombre AS nombreSede,
-        i.cantidad
-FROM INVENTARIO i
-JOIN REPUESTOS r ON r.serie = i.repuesto
-JOIN SEDES se ON se.numero = i.sede
-WHERE r.nombre = 'Filtro de aceite'
-ORDER BY i.cantidad ASC;
+-- SELECT  r.serie,
+--         r.nombre,
+--         se.numero AS sede,
+--         se.nombre AS nombreSede,
+--         i.cantidad
+-- FROM INVENTARIO i
+-- JOIN REPUESTOS r ON r.serie = i.repuesto
+-- JOIN SEDES se ON se.numero = i.sede
+-- WHERE r.nombre = 'Filtro de aceite'
+-- ORDER BY i.cantidad ASC;
 
     -- Historial de servicios del técnico
 SELECT  s.numero,
@@ -59,11 +61,10 @@ SELECT  s.numero,
         s.vehiculo AS placa,
         cs.nombre AS servicio,
         d.estado
-FROM TRABAJA t
-JOIN DETALLE_ORDENES d ON d.id = t.detalle_orden
+FROM DETALLE_ORDENES d
 JOIN SERVICIOS s ON s.numero = d.servicio
 JOIN CATALOGO_SERVICIOS cs ON cs.codigo = d.catalogo_servicio
-WHERE t.tecnico = '2020202020' AND d.fecha_fin BETWEEN DATE '2026-01-01' AND DATE '2026-12-31'
+WHERE d.tecnico = '2020202020' AND d.fecha_fin BETWEEN DATE '2026-01-01' AND DATE '2026-12-31'
 ORDER BY d.fecha_fin DESC;
 
     -- Tecnicos sin servicio asignado
@@ -75,10 +76,10 @@ SELECT  p.cedula AS cedulaTecnico,
 FROM TECNICOS t 
 JOIN EMPLEADOS e ON t.empleado = e.persona
 JOIN PERSONAS p ON e.persona = p.cedula
-WHERE t.empleado NOT IN (
-    SELECT tra.tecnico
-    FROM TRABAJA tra, DETALLE_ORDENES det
-    WHERE tra.detalle_orden = det.id AND det.estado = 'E'
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM DETALLE_ORDENES det
+    WHERE det.tecnico = t.empleado AND det.estado = 'E'
 )
 ORDER BY  t.especialidad ASC, p.nombre ASC;
 
@@ -113,9 +114,11 @@ SELECT  g.numero,
         v.placa, 
         cat.nombre, 
         g.fecha_inicio, 
+        g.fecha_fin, 
         g.condiciones
 FROM GARANTIAS g, VEHICULOS v, CATALOGO_SERVICIOS cat, DETALLE_ORDENES det, SERVICIOS s
-WHERE g.detalle_orden = det.id 
+WHERE g.servicio = det.servicio 
+    AND g.item = det.item 
     AND v.placa = s.vehiculo 
     AND det.catalogo_servicio = cat.codigo 
     AND det.servicio = s.numero 
