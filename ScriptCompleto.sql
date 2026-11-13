@@ -839,6 +839,52 @@ TRUNCATE TABLE PAGOS, COBROS, MOVIMIENTOS, DETALLE_COMPRAS, COMPRAS, SUMINISTROS
 -- Consultas
 
 -- Consultas gerenciales
+    -- Ganancia por sede en un mes
+SELECT  t.numero,
+        t.nombre,
+        t.totalCobrado,
+        t.totalCompras,
+        t.totalSalarios,
+        t.totalCobrado - t.totalCompras - t.totalSalarios AS ganancia
+FROM (
+    SELECT  se.numero,
+            se.nombre,
+            COALESCE((SELECT SUM(m.valor)
+                        FROM COBROS c
+                        JOIN MOVIMIENTOS m ON m.numero = c.movimiento
+                        JOIN SERVICIOS s ON s.numero = c.orden
+                        WHERE s.sede = se.numero AND m.estado = 'P'
+                        AND m.fecha BETWEEN '2026-09-01' AND '2026-09-30'), 0) AS totalCobrado,
+            COALESCE((SELECT SUM(m.valor)
+                        FROM PAGOS pg
+                        JOIN MOVIMIENTOS m ON m.numero = pg.movimiento
+                        JOIN COMPRAS co ON co.numero = pg.compra
+                        WHERE co.sede = se.numero AND m.estado = 'P'
+                        AND m.fecha BETWEEN '2026-09-01' AND '2026-09-30'), 0) AS totalCompras,
+            COALESCE((SELECT SUM(e.salario)
+                        FROM EMPLEADOS e
+                        WHERE e.sede = se.numero), 0) AS totalSalarios
+    FROM SEDES se
+) t
+ORDER BY ganancia DESC;
+
+    -- Valor generado por los tecnicos de una sede en un mes
+SELECT  p.nombre,
+        p.apellido,
+        e.sede,
+        COUNT(*) AS trabajosFinalizados,
+        SUM(d.valor_cobrado) AS valorGenerado,
+        SUM(d.horas_trabajadas) AS horasTrabajadas,
+        SUM(cs.tiempo_medio) AS horasEstimadas,
+        SUM(d.horas_trabajadas) - SUM(cs.tiempo_medio) AS diferencia
+FROM DETALLE_ORDENES d
+JOIN EMPLEADOS e ON e.persona = d.tecnico
+JOIN PERSONAS p ON p.cedula = e.persona
+JOIN CATALOGO_SERVICIOS cs ON cs.codigo = d.catalogo_servicio
+WHERE d.estado = 'F' AND e.sede = 'S01' AND d.fecha_fin BETWEEN '2026-09-01' AND '2026-09-30'
+GROUP BY p.cedula, p.nombre, p.apellido, e.sede
+ORDER BY valorGenerado DESC;
+
     -- Clientes que mas han gastado en el negocio
 SELECT  p.cedula,
         p.nombre,
@@ -854,6 +900,27 @@ JOIN PERSONAS p ON p.cedula = v.cliente
 WHERE m.estado = 'P' AND m.fecha BETWEEN '2026-01-01' AND '2026-12-31'
 GROUP BY p.cedula, p.nombre, p.apellido
 ORDER BY totalCobrado DESC;
+
+    -- Repuestos por agotarse en una sede
+SELECT  r.serie,
+        r.nombre,
+        i.cantidad AS cantidadDisponible,
+        COALESCE(u.cantidadUsada, 0) AS cantidadUsada,
+        COALESCE(ROUND(u.cantidadUsada / u.meses, 2), 0) AS consumoMensualPromedio
+FROM EMPLEADOS e
+JOIN INVENTARIO i ON i.sede = e.sede
+JOIN REPUESTOS r ON r.serie = i.repuesto
+LEFT JOIN (
+    SELECT  s.sede,
+            co.repuesto,
+            SUM(co.cantidad) AS cantidadUsada,
+            COUNT(DISTINCT TO_CHAR(co.fecha_uso, 'YYYY-MM')) AS meses
+    FROM CONSUMOS co
+    JOIN SERVICIOS s ON s.numero = co.servicio
+    GROUP BY s.sede, co.repuesto
+) u ON u.sede = i.sede AND u.repuesto = i.repuesto
+WHERE e.persona = '3030303030' AND e.cargo = 'G'
+ORDER BY i.cantidad ASC;
 
 
 
