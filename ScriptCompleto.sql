@@ -172,7 +172,6 @@ CREATE TABLE COMPRAS(
 );
 
 CREATE TABLE DETALLE_COMPRAS(
-    id VARCHAR(10) NOT NULL,
     cantidad INTEGER NOT NULL,
     precio_unidad T_MONEDA NOT NULL,
     compra VARCHAR(10) NOT NULL,
@@ -293,7 +292,7 @@ ALTER TABLE COMPRAS ADD CONSTRAINT PK_COMPRAS
     PRIMARY KEY (numero);
 
 ALTER TABLE DETALLE_COMPRAS ADD CONSTRAINT PK_DETALLE_COMPRAS
-    PRIMARY KEY (id);
+    PRIMARY KEY (compra, repuesto);
 
 ALTER TABLE MOVIMIENTOS ADD CONSTRAINT PK_MOVIMIENTOS
     PRIMARY KEY (numero);
@@ -589,6 +588,26 @@ CREATE TRIGGER tg_2_SERVICIOS_bu
     EXECUTE FUNCTION fc_tg_2_SERVICIOS_bu();
 
 
+--Al cancelar un servicio, sus detalles de orden en proceso tambien quedan cancelados.
+CREATE OR REPLACE FUNCTION fc_tg_1_SERVICIOS_au() RETURNS TRIGGER AS
+$$
+BEGIN
+    IF NEW.estado = 'C' AND OLD.estado <> 'C' THEN
+        UPDATE DETALLE_ORDENES
+        SET estado = 'C'
+        WHERE servicio = NEW.numero AND estado = 'E';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_1_SERVICIOS_au
+    AFTER UPDATE ON SERVICIOS
+    FOR EACH ROW
+    EXECUTE FUNCTION fc_tg_1_SERVICIOS_au();
+
+
     --Eliminar
 --No se permiten eliminar los serivicios realizados de la base de datos pero si los cancelados
 CREATE OR REPLACE FUNCTION fc_tg_2_SERVICIOS_bd() RETURNS TRIGGER AS
@@ -616,12 +635,41 @@ CREATE TRIGGER tg_2_SERVICIOS_bd
 -- DROP TRIGGER IF EXISTS tg_1_SERVICIOS_bi ON SERVICIOS;
 -- DROP TRIGGER IF EXISTS tg_1_SERVICIOS_bu ON SERVICIOS;
 -- DROP TRIGGER IF EXISTS tg_2_SERVICIOS_bu ON SERVICIOS;
+-- DROP TRIGGER IF EXISTS tg_1_SERVICIOS_au ON SERVICIOS;
 -- DROP TRIGGER IF EXISTS tg_2_SERVICIOS_bd ON SERVICIOS;
 
 -- DROP FUNCTION IF EXISTS fc_tg_1_SERVICIOS_bi();
 -- DROP FUNCTION IF EXISTS fc_tg_1_SERVICIOS_bu();
 -- DROP FUNCTION IF EXISTS fc_tg_2_SERVICIOS_bu();
+-- DROP FUNCTION IF EXISTS fc_tg_1_SERVICIOS_au();
 -- DROP FUNCTION IF EXISTS fc_tg_2_SERVICIOS_bd();
+
+--Vistas
+--Inventario: unidades disponibles de cada repuesto en cada sede.
+--se calcula como = cantidad = compras + traslados que llegan - traslados que salen - consumos
+CREATE VIEW INVENTARIO AS
+SELECT  m.sede,
+        m.repuesto,
+        SUM(m.cantidad) AS cantidad
+FROM (
+    SELECT c.sede, dc.repuesto, dc.cantidad
+    FROM DETALLE_COMPRAS dc
+    JOIN COMPRAS c ON c.numero = dc.compra
+    UNION ALL
+    SELECT t.sede_llega, t.repuesto, t.cantidad
+    FROM TRASLADOS t
+    UNION ALL
+    SELECT t.sede_sale, t.repuesto, -t.cantidad
+    FROM TRASLADOS t
+    UNION ALL
+    SELECT s.sede, co.repuesto, -co.cantidad
+    FROM CONSUMOS co
+    JOIN SERVICIOS s ON s.numero = co.servicio
+) m
+GROUP BY m.sede, m.repuesto;
+
+    --XVistas
+-- DROP VIEW IF EXISTS INVENTARIO;
 
 -- MecaData PoblarOK
 INSERT INTO PERSONAS (cedula, nombre, apellido, correo, telefono) VALUES
@@ -718,10 +766,10 @@ INSERT INTO COMPRAS (numero, fecha, sede, proveedor) VALUES
     ('C02', '2025-02-11', 'S02', '900654321'),
     ('C03', '2026-08-20', 'S01', '900654321');
 
-INSERT INTO DETALLE_COMPRAS (id, cantidad, precio_unidad, compra, repuesto) VALUES
-    ('DC01', 30, 20000.00, 'C01', 'R001'),
-    ('DC02', 10, 45000.00, 'C02', 'R002'),
-    ('DC03', 10, 45000.00, 'C03', 'R002');
+INSERT INTO DETALLE_COMPRAS (cantidad, precio_unidad, compra, repuesto) VALUES
+    (30, 20000.00, 'C01', 'R001'),
+    (10, 45000.00, 'C02', 'R002'),
+    (10, 45000.00, 'C03', 'R002');
 
 INSERT INTO MOVIMIENTOS (numero, fecha, valor, descripcion, estado) VALUES
     ('M01', '2026-09-15', 340000.00, 'Cobro orden de servicio DEF456', 'P'),
@@ -782,16 +830,16 @@ INSERT INTO GARANTIAS (numero, fecha_inicio, fecha_fin, condiciones, estado, ser
 --XPoblar
 /*
 TRUNCATE TABLE PAGOS, COBROS, MOVIMIENTOS, DETALLE_COMPRAS, COMPRAS, SUMINISTROS, PROVEEDORES,
-               CONSUMOS, TRASLADOS, REPUESTOS, GARANTIAS, DETALLE_ORDENES, SERVICIOS,
-               OFERTAS_SERVICIOS, CATALOGO_SERVICIOS, TECNICOS, EMPLEADOS, SEDES,
-               AUTOMOVILES, VEHICULOS, CLIENTES, PERSONAS
+                CONSUMOS, TRASLADOS, REPUESTOS, GARANTIAS, DETALLE_ORDENES, SERVICIOS,
+                OFERTAS_SERVICIOS, CATALOGO_SERVICIOS, TECNICOS, EMPLEADOS, SEDES,
+                AUTOMOVILES, VEHICULOS, CLIENTES, PERSONAS
     RESTART IDENTITY;
 */
 
 -- Consultas
 
 -- Consultas gerenciales
-    -- Clientes que mas han gastado en el negocio 
+    -- Clientes que mas han gastado en el negocio
 SELECT  p.cedula,
         p.nombre,
         p.apellido,
@@ -810,7 +858,7 @@ ORDER BY totalCobrado DESC;
 
 
 -- Consultas operativas
-    -- Servicios en proceso 
+    -- Servicios en proceso
 SELECT  s.numero,
         s.vehiculo AS placa,
         p.nombre,
@@ -831,20 +879,20 @@ SELECT  cs.codigo,
 FROM EMPLEADOS e
 JOIN OFERTAS_SERVICIOS p ON p.sede = e.sede
 JOIN CATALOGO_SERVICIOS cs ON cs.codigo = p.catalogo_servicio
-WHERE e.persona = '5050505050' AND e.cargo = 'A' AND p.habilitado = TRUE
+WHERE e.persona = '3030303030' AND e.cargo = 'G' AND p.habilitado = TRUE
 ORDER BY cs.nombre;
 
     -- Consultar cantidad de un repuesto
--- SELECT  r.serie,
---         r.nombre,
---         se.numero AS sede,
---         se.nombre AS nombreSede,
---         i.cantidad
--- FROM INVENTARIO i
--- JOIN REPUESTOS r ON r.serie = i.repuesto
--- JOIN SEDES se ON se.numero = i.sede
--- WHERE r.nombre = 'Filtro de aceite'
--- ORDER BY i.cantidad ASC;
+SELECT  r.serie,
+        r.nombre,
+        se.numero AS sede,
+        se.nombre AS nombreSede,
+        i.cantidad
+FROM INVENTARIO i
+JOIN REPUESTOS r ON r.serie = i.repuesto
+JOIN SEDES se ON se.numero = i.sede
+WHERE r.nombre = 'Filtro de aceite'
+ORDER BY i.cantidad ASC;
 
     -- Historial de servicios del técnico
 SELECT  s.numero,
@@ -858,40 +906,56 @@ JOIN CATALOGO_SERVICIOS cs ON cs.codigo = d.catalogo_servicio
 WHERE d.tecnico = '2020202020' AND d.fecha_fin BETWEEN DATE '2026-01-01' AND DATE '2026-12-31'
 ORDER BY d.fecha_fin DESC;
 
+    -- Procedimientos previos de un vehiculo
+SELECT  d.fecha_inicio AS fecha,
+        s.sede,
+        s.numero AS numeroOrden,
+        cs.nombre AS servicio,
+        r.nombre AS repuestoUsado
+FROM SERVICIOS s
+JOIN DETALLE_ORDENES d ON d.servicio = s.numero
+JOIN CATALOGO_SERVICIOS cs ON cs.codigo = d.catalogo_servicio
+LEFT JOIN CONSUMOS co ON co.servicio = d.servicio AND co.item = d.item
+LEFT JOIN REPUESTOS r ON r.serie = co.repuesto
+WHERE s.vehiculo = 'DEF456'
+ORDER BY d.fecha_inicio DESC;
+
     -- Tecnicos sin servicio asignado
-SELECT  p.cedula AS cedulaTecnico, 
-        p.nombre AS nombreTecnico, 
-        p.apellido AS apellidoTecnico, 
-        t.especialidad AS especialidadTecnico, 
+SELECT  p.cedula AS cedulaTecnico,
+        p.nombre AS nombreTecnico,
+        p.apellido AS apellidoTecnico,
+        t.especialidad AS especialidadTecnico,
         p.telefono AS telefonoTecnico
-FROM TECNICOS t 
+FROM TECNICOS t
 JOIN EMPLEADOS e ON t.empleado = e.persona
 JOIN PERSONAS p ON e.persona = p.cedula
-WHERE NOT EXISTS (
-    SELECT 1
-    FROM DETALLE_ORDENES det
-    WHERE det.tecnico = t.empleado AND det.estado = 'E'
-)
+WHERE e.sede = (SELECT g.sede FROM EMPLEADOS g WHERE g.persona = '3030303030' AND g.cargo = 'G')
+    AND NOT EXISTS (
+        SELECT 1
+        FROM DETALLE_ORDENES det
+        WHERE det.tecnico = t.empleado AND det.estado = 'E'
+    )
 ORDER BY  t.especialidad ASC, p.nombre ASC;
 
     -- La información de contacto de los gerentes
 SELECT  s.numero AS numeroSede,
-        s.nombre AS nombreSede, 
-        p.nombre AS nombreGerente, 
-        p.apellido AS apellidoGerente, 
-        p.correo AS correoGerente, 
+        s.nombre AS nombreSede,
+        p.nombre AS nombreGerente,
+        p.apellido AS apellidoGerente,
+        p.correo AS correoGerente,
         p.telefono AS telefonoGerente
 FROM SEDES s
 JOIN EMPLEADOS e ON e.sede = s.numero
 JOIN PERSONAS p ON p.cedula = e.persona
 WHERE e.cargo = 'G'
+    AND e.sede <> (SELECT g.sede FROM EMPLEADOS g WHERE g.persona = '3030303030' AND g.cargo = 'G')
 ORDER BY s.nombre ASC;
 
     -- Consultar estado de un ser
-SELECT  s.numero AS numeroOrden, 
-        s.sede AS sede, 
-        det.fecha_inicio AS fechaInicio, 
-        cat.nombre AS servicioRealizado, 
+SELECT  s.numero AS numeroOrden,
+        s.sede AS sede,
+        det.fecha_inicio AS fechaInicio,
+        cat.nombre AS servicioRealizado,
         det.estado AS estadoServicio
 FROM SERVICIOS s
 JOIN VEHICULOS v ON v.placa = s.vehiculo
@@ -901,18 +965,18 @@ WHERE v.cliente = '1010101010' AND v.placa = 'ABC123' AND s.estado = 'E'
 ORDER BY det.fecha_inicio ASC;
 
     -- Consultar las garantias vigentes
-SELECT  g.numero, 
-        v.placa, 
-        cat.nombre, 
-        g.fecha_inicio, 
-        g.fecha_fin, 
+SELECT  g.numero,
+        v.placa,
+        cat.nombre,
+        g.fecha_inicio,
+        g.fecha_fin,
         g.condiciones
 FROM GARANTIAS g, VEHICULOS v, CATALOGO_SERVICIOS cat, DETALLE_ORDENES det, SERVICIOS s
-WHERE g.servicio = det.servicio 
-    AND g.item = det.item 
-    AND v.placa = s.vehiculo 
-    AND det.catalogo_servicio = cat.codigo 
-    AND det.servicio = s.numero 
-    AND v.cliente = '1010101010' 
+WHERE g.servicio = det.servicio
+    AND g.item = det.item
+    AND v.placa = s.vehiculo
+    AND det.catalogo_servicio = cat.codigo
+    AND det.servicio = s.numero
+    AND v.cliente = '1010101010'
     AND g.estado = 'V'
 ORDER BY g.fecha_inicio DESC;
