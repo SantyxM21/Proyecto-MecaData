@@ -1,3 +1,4 @@
+-- Active: 1794333671248@@granate.is.escuelaing.edu.co@5432@db1000107428
 --Dominios
 CREATE DOMAIN T_PLACA AS VARCHAR(6)
     CHECK (VALUE ~ '^[A-Z]{3}[0-9]{3}$');
@@ -609,14 +610,11 @@ CREATE TRIGGER tg_1_SERVICIOS_au
 
 
     --Eliminar
---No se permiten eliminar los serivicios realizados de la base de datos pero si los cancelados
+--No se permite eliminar los servicios de la base de datos: un servicio que no continua se cancela.
 CREATE OR REPLACE FUNCTION fc_tg_2_SERVICIOS_bd() RETURNS TRIGGER AS
 $$
 BEGIN
-    IF OLD.estado IN ('F','E') THEN
-    RAISE EXCEPTION 'No se permiten eliminar los servicios realizados de la base datos';
-    END IF;
-    RETURN OLD;
+    RAISE EXCEPTION 'No se permite eliminar los servicios; un servicio que no continua se cancela';
 END;
 $$ LANGUAGE plpgsql;
 
@@ -668,7 +666,101 @@ FROM (
 ) m
 GROUP BY m.sede, m.repuesto;
 
+--Ganancia de cada sede en cada mes (AAAA-MM) en el que hubo movimientos de caja pagados.
+--ganancia = total cobrado - total de compras pagadas - salarios mensuales de los empleados de la sede
+CREATE VIEW GANANCIAS_SEDES AS
+SELECT  t.sede,
+        t.nombre,
+        t.mes,
+        t.totalCobrado,
+        t.totalCompras,
+        t.totalSalarios,
+        t.totalCobrado - t.totalCompras - t.totalSalarios AS ganancia
+FROM (
+    SELECT  se.numero AS sede,
+            se.nombre,
+            me.mes,
+            COALESCE((SELECT SUM(m.valor)
+                        FROM COBROS c
+                        JOIN MOVIMIENTOS m ON m.numero = c.movimiento
+                        JOIN SERVICIOS s ON s.numero = c.orden
+                        WHERE s.sede = se.numero AND m.estado = 'P'
+                        AND TO_CHAR(m.fecha, 'YYYY-MM') = me.mes), 0) AS totalCobrado,
+            COALESCE((SELECT SUM(m.valor)
+                        FROM PAGOS pg
+                        JOIN MOVIMIENTOS m ON m.numero = pg.movimiento
+                        JOIN COMPRAS co ON co.numero = pg.compra
+                        WHERE co.sede = se.numero AND m.estado = 'P'
+                        AND TO_CHAR(m.fecha, 'YYYY-MM') = me.mes), 0) AS totalCompras,
+            COALESCE((SELECT SUM(e.salario)
+                        FROM EMPLEADOS e
+                        WHERE e.sede = se.numero), 0) AS totalSalarios
+    FROM SEDES se
+    CROSS JOIN (SELECT DISTINCT TO_CHAR(m.fecha, 'YYYY-MM') AS mes
+                FROM MOVIMIENTOS m
+                WHERE m.estado = 'P') me
+) t;
+
+--Valor generado por cada tecnico en cada mes (AAAA-MM), con sus detalles de orden finalizados.
+CREATE VIEW VALORES_TECNICOS AS
+SELECT  p.cedula,
+        p.nombre,
+        p.apellido,
+        e.sede,
+        TO_CHAR(d.fecha_fin, 'YYYY-MM') AS mes,
+        COUNT(*) AS trabajosFinalizados,
+        SUM(d.valor_cobrado) AS valorGenerado,
+        SUM(d.horas_trabajadas) AS horasTrabajadas,
+        SUM(cs.tiempo_medio) AS horasEstimadas,
+        SUM(d.horas_trabajadas) - SUM(cs.tiempo_medio) AS diferencia
+FROM DETALLE_ORDENES d
+JOIN EMPLEADOS e ON e.persona = d.tecnico
+JOIN PERSONAS p ON p.cedula = e.persona
+JOIN CATALOGO_SERVICIOS cs ON cs.codigo = d.catalogo_servicio
+WHERE d.estado = 'F'
+GROUP BY p.cedula, p.nombre, p.apellido, e.sede, TO_CHAR(d.fecha_fin, 'YYYY-MM');
+
+--Cobros pagados de cada cliente: una fila por orden cobrada, con el vehiculo y la fecha del cobro.
+CREATE VIEW COBROS_CLIENTES AS
+SELECT  p.cedula,
+        p.nombre,
+        p.apellido,
+        v.placa,
+        s.numero AS orden,
+        m.fecha,
+        m.valor
+FROM COBROS c
+JOIN MOVIMIENTOS m ON m.numero = c.movimiento
+JOIN SERVICIOS s ON s.numero = c.orden
+JOIN VEHICULOS v ON v.placa = s.vehiculo
+JOIN PERSONAS p ON p.cedula = v.cliente
+WHERE m.estado = 'P';
+
+--Existencias y consumo de cada repuesto en cada sede, para saber cuales estan por agotarse.
+CREATE VIEW REPUESTOS_POR_AGOTARSE AS
+SELECT  i.sede,
+        r.serie,
+        r.nombre,
+        i.cantidad AS cantidadDisponible,
+        COALESCE(u.cantidadUsada, 0) AS cantidadUsada,
+        COALESCE(ROUND(u.cantidadUsada / u.meses, 2), 0) AS consumoMensualPromedio
+FROM INVENTARIO i
+JOIN REPUESTOS r ON r.serie = i.repuesto
+LEFT JOIN (
+    SELECT  s.sede,
+            co.repuesto,
+            SUM(co.cantidad) AS cantidadUsada,
+            COUNT(DISTINCT TO_CHAR(co.fecha_uso, 'YYYY-MM')) AS meses
+    FROM CONSUMOS co
+    JOIN SERVICIOS s ON s.numero = co.servicio
+    GROUP BY s.sede, co.repuesto
+) u ON u.sede = i.sede AND u.repuesto = i.repuesto;
+
     --XVistas
+-- DROP VIEW IF EXISTS REPUESTOS_POR_AGOTARSE;
+-- DROP VIEW IF EXISTS COBROS_CLIENTES;
+-- DROP VIEW IF EXISTS VALORES_TECNICOS;
+-- DROP VIEW IF EXISTS GANANCIAS_SEDES;
 -- DROP VIEW IF EXISTS INVENTARIO;
 
 -- MecaData PoblarOK
@@ -734,7 +826,7 @@ INSERT INTO SERVICIOS (numero, fecha_inicio, fecha_fin, estado, vehiculo, sede) 
     ('OS26-00000004', '2026-10-20', NULL, 'C', 'GHI789', 'S02');
 
 SELECT setval('SQ_SERVICIOS_numero',
-              (SELECT COALESCE(MAX(SPLIT_PART(numero, '-', 2)::INTEGER), 0) + 1 FROM SERVICIOS), false);
+                (SELECT COALESCE(MAX(SPLIT_PART(numero, '-', 2)::INTEGER), 0) + 1 FROM SERVICIOS), false);
 
 INSERT INTO DETALLE_ORDENES (item, valor_cobrado, estado, fecha_inicio, fecha_fin, catalogo_servicio, servicio, tecnico, horas_trabajadas) VALUES
     (1, 160000.00, 'E', '2026-11-03', NULL, 'CS01', 'OS26-00000001', '2020202020', 1.5),
@@ -840,87 +932,51 @@ TRUNCATE TABLE PAGOS, COBROS, MOVIMIENTOS, DETALLE_COMPRAS, COMPRAS, SUMINISTROS
 
 -- Consultas gerenciales
     -- Ganancia por sede en un mes
-SELECT  t.numero,
-        t.nombre,
-        t.totalCobrado,
-        t.totalCompras,
-        t.totalSalarios,
-        t.totalCobrado - t.totalCompras - t.totalSalarios AS ganancia
-FROM (
-    SELECT  se.numero,
-            se.nombre,
-            COALESCE((SELECT SUM(m.valor)
-                        FROM COBROS c
-                        JOIN MOVIMIENTOS m ON m.numero = c.movimiento
-                        JOIN SERVICIOS s ON s.numero = c.orden
-                        WHERE s.sede = se.numero AND m.estado = 'P'
-                        AND m.fecha BETWEEN '2026-09-01' AND '2026-09-30'), 0) AS totalCobrado,
-            COALESCE((SELECT SUM(m.valor)
-                        FROM PAGOS pg
-                        JOIN MOVIMIENTOS m ON m.numero = pg.movimiento
-                        JOIN COMPRAS co ON co.numero = pg.compra
-                        WHERE co.sede = se.numero AND m.estado = 'P'
-                        AND m.fecha BETWEEN '2026-09-01' AND '2026-09-30'), 0) AS totalCompras,
-            COALESCE((SELECT SUM(e.salario)
-                        FROM EMPLEADOS e
-                        WHERE e.sede = se.numero), 0) AS totalSalarios
-    FROM SEDES se
-) t
-ORDER BY ganancia DESC;
+SELECT  g.sede,
+        g.nombre,
+        g.totalCobrado,
+        g.totalCompras,
+        g.totalSalarios,
+        g.ganancia
+FROM GANANCIAS_SEDES g
+WHERE g.mes = '2026-09'
+ORDER BY g.ganancia DESC;
 
     -- Valor generado por los tecnicos de una sede en un mes
-SELECT  p.nombre,
-        p.apellido,
-        e.sede,
-        COUNT(*) AS trabajosFinalizados,
-        SUM(d.valor_cobrado) AS valorGenerado,
-        SUM(d.horas_trabajadas) AS horasTrabajadas,
-        SUM(cs.tiempo_medio) AS horasEstimadas,
-        SUM(d.horas_trabajadas) - SUM(cs.tiempo_medio) AS diferencia
-FROM DETALLE_ORDENES d
-JOIN EMPLEADOS e ON e.persona = d.tecnico
-JOIN PERSONAS p ON p.cedula = e.persona
-JOIN CATALOGO_SERVICIOS cs ON cs.codigo = d.catalogo_servicio
-WHERE d.estado = 'F' AND e.sede = 'S01' AND d.fecha_fin BETWEEN '2026-09-01' AND '2026-09-30'
-GROUP BY p.cedula, p.nombre, p.apellido, e.sede
-ORDER BY valorGenerado DESC;
+SELECT  vt.nombre,
+        vt.apellido,
+        vt.sede,
+        vt.trabajosFinalizados,
+        vt.valorGenerado,
+        vt.horasTrabajadas,
+        vt.horasEstimadas,
+        vt.diferencia
+FROM VALORES_TECNICOS vt
+WHERE vt.sede = 'S01' AND vt.mes = '2026-09'
+ORDER BY vt.valorGenerado DESC;
 
     -- Clientes que mas han gastado en el negocio
-SELECT  p.cedula,
-        p.nombre,
-        p.apellido,
-        COUNT(DISTINCT v.placa) AS numeroVehiculos,
-        COUNT(DISTINCT s.numero) AS numeroOrdenes,
-        SUM(m.valor) AS totalCobrado
-FROM COBROS c
-JOIN MOVIMIENTOS m ON m.numero = c.movimiento
-JOIN SERVICIOS s ON s.numero = c.orden
-JOIN VEHICULOS v ON v.placa = s.vehiculo
-JOIN PERSONAS p ON p.cedula = v.cliente
-WHERE m.estado = 'P' AND m.fecha BETWEEN '2026-01-01' AND '2026-12-31'
-GROUP BY p.cedula, p.nombre, p.apellido
+SELECT  cc.cedula,
+        cc.nombre,
+        cc.apellido,
+        COUNT(DISTINCT cc.placa) AS numeroVehiculos,
+        COUNT(DISTINCT cc.orden) AS numeroOrdenes,
+        SUM(cc.valor) AS totalCobrado
+FROM COBROS_CLIENTES cc
+WHERE cc.fecha BETWEEN '2026-01-01' AND '2026-12-31'
+GROUP BY cc.cedula, cc.nombre, cc.apellido
 ORDER BY totalCobrado DESC;
 
     -- Repuestos por agotarse en una sede
-SELECT  r.serie,
-        r.nombre,
-        i.cantidad AS cantidadDisponible,
-        COALESCE(u.cantidadUsada, 0) AS cantidadUsada,
-        COALESCE(ROUND(u.cantidadUsada / u.meses, 2), 0) AS consumoMensualPromedio
-FROM EMPLEADOS e
-JOIN INVENTARIO i ON i.sede = e.sede
-JOIN REPUESTOS r ON r.serie = i.repuesto
-LEFT JOIN (
-    SELECT  s.sede,
-            co.repuesto,
-            SUM(co.cantidad) AS cantidadUsada,
-            COUNT(DISTINCT TO_CHAR(co.fecha_uso, 'YYYY-MM')) AS meses
-    FROM CONSUMOS co
-    JOIN SERVICIOS s ON s.numero = co.servicio
-    GROUP BY s.sede, co.repuesto
-) u ON u.sede = i.sede AND u.repuesto = i.repuesto
+SELECT  ra.serie,
+        ra.nombre,
+        ra.cantidadDisponible,
+        ra.cantidadUsada,
+        ra.consumoMensualPromedio
+FROM REPUESTOS_POR_AGOTARSE ra
+JOIN EMPLEADOS e ON e.sede = ra.sede
 WHERE e.persona = '3030303030' AND e.cargo = 'G'
-ORDER BY i.cantidad ASC;
+ORDER BY ra.cantidadDisponible ASC;
 
 
 
