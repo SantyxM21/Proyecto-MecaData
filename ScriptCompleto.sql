@@ -630,6 +630,171 @@ CREATE TRIGGER tg_2_SERVICIOS_bd
     EXECUTE FUNCTION fc_tg_2_SERVICIOS_bd();
 
 
+    --COMPRAS
+    --Valores por omision
+ALTER TABLE COMPRAS ALTER COLUMN fecha SET DEFAULT CURRENT_DATE;
+
+--Consecutivo del numero de la compra (C#########) con secuencia.
+CREATE SEQUENCE SQ_COMPRAS_numero OWNED BY COMPRAS.numero;
+SELECT setval('SQ_COMPRAS_numero',
+                (SELECT COALESCE(MAX(SUBSTRING(numero FROM 2)::INTEGER), 0) + 1 FROM COMPRAS), false);
+ALTER TABLE COMPRAS ALTER COLUMN numero SET DEFAULT
+    'C' || LPAD(nextval('SQ_COMPRAS_numero')::TEXT, 9, '0');
+
+    --Adicionar
+--Al registrar una compra, su fecha no puede ser futura
+CREATE OR REPLACE FUNCTION fc_tg_1_COMPRAS_bi() RETURNS TRIGGER AS
+$$
+BEGIN
+    IF NEW.fecha > CURRENT_DATE THEN
+        RAISE EXCEPTION 'La fecha de la compra no puede ser futura';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_1_COMPRAS_bi
+    BEFORE INSERT ON COMPRAS
+    FOR EACH ROW
+    EXECUTE FUNCTION fc_tg_1_COMPRAS_bi();
+
+    --Modificar
+--Una compra pagada no se modifica. De una compra solo cambia el proveedor y solo mientras no tenga detalles
+--el numero, la fecha y la sede no cambian
+CREATE OR REPLACE FUNCTION fc_tg_1_COMPRAS_bu() RETURNS TRIGGER AS
+$$
+BEGIN
+    IF EXISTS (SELECT 1 FROM PAGOS pg WHERE pg.compra = OLD.numero) THEN
+        RAISE EXCEPTION 'La compra ya tiene pago y no se puede modificar';
+    END IF;
+
+    IF NEW.numero IS DISTINCT FROM OLD.numero
+        OR NEW.fecha IS DISTINCT FROM OLD.fecha
+        OR NEW.sede IS DISTINCT FROM OLD.sede THEN
+        RAISE EXCEPTION 'De una compra solo se puede modificar el proveedor';
+    END IF;
+
+    IF NEW.proveedor IS DISTINCT FROM OLD.proveedor
+        AND EXISTS (SELECT 1 FROM DETALLE_COMPRAS dc WHERE dc.compra = OLD.numero) THEN
+        RAISE EXCEPTION 'No se puede cambiar el proveedor de una compra que ya tiene detalles';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_1_COMPRAS_bu
+    BEFORE UPDATE ON COMPRAS
+    FOR EACH ROW
+    EXECUTE FUNCTION fc_tg_1_COMPRAS_bu();
+
+
+    --DETALLE_COMPRAS
+--Los detalles de una compra que ya tiene pago no se agregan, no se modifican y no se eliminan.
+CREATE OR REPLACE FUNCTION fc_tg_1_DETALLE_COMPRAS_biud() RETURNS TRIGGER AS
+$$
+BEGIN
+    IF TG_OP IN ('UPDATE', 'DELETE')
+        AND EXISTS (SELECT 1 FROM PAGOS pg WHERE pg.compra = OLD.compra) THEN
+        RAISE EXCEPTION 'La compra ya tiene pago y no se puede modificar';
+    END IF;
+
+    IF TG_OP IN ('INSERT', 'UPDATE')
+        AND EXISTS (SELECT 1 FROM PAGOS pg WHERE pg.compra = NEW.compra) THEN
+        RAISE EXCEPTION 'La compra ya tiene pago y no se puede modificar';
+    END IF;
+
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_1_DETALLE_COMPRAS_biud
+    BEFORE INSERT OR UPDATE OR DELETE ON DETALLE_COMPRAS
+    FOR EACH ROW
+    EXECUTE FUNCTION fc_tg_1_DETALLE_COMPRAS_biud();
+
+
+--Si no se indica el precio por unidad se toma el precio de referencia del proveedor de la compra
+--si el proveedor no tiene precio de referencia para ese repuesto, el precio se debe indicar.
+CREATE OR REPLACE FUNCTION fc_tg_2_DETALLE_COMPRAS_bi() RETURNS TRIGGER AS
+$$
+BEGIN
+    IF NEW.precio_unidad IS NULL THEN
+        SELECT su.precio_referencia INTO NEW.precio_unidad
+        FROM COMPRAS c
+        JOIN SUMINISTROS su ON su.proveedor = c.proveedor
+        WHERE c.numero = NEW.compra AND su.repuesto = NEW.repuesto;
+
+        IF NEW.precio_unidad IS NULL THEN
+            RAISE EXCEPTION 'Se debe indicar el precio por unidad, el proveedor no tiene precio de referencia para ese repuesto';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_2_DETALLE_COMPRAS_bi
+    BEFORE INSERT ON DETALLE_COMPRAS
+    FOR EACH ROW
+    EXECUTE FUNCTION fc_tg_2_DETALLE_COMPRAS_bi();
+
+
+    --PAGOS
+--Los pagos de las compras no se modifican ni se eliminan: son el registro de lo que ya se le pago al proveedor.
+CREATE OR REPLACE FUNCTION fc_tg_1_PAGOS_bud() RETURNS TRIGGER AS
+$$
+BEGIN
+    RAISE EXCEPTION 'Los pagos no se pueden modificar ni eliminar';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_1_PAGOS_bud
+    BEFORE UPDATE OR DELETE ON PAGOS
+    FOR EACH ROW
+    EXECUTE FUNCTION fc_tg_1_PAGOS_bud();
+
+
+    --MOVIMIENTOS
+--Un movimiento de caja es un cobro o un pago, nunca los dos a la vez.
+CREATE OR REPLACE FUNCTION fc_tg_2_PAGOS_bi() RETURNS TRIGGER AS
+$$
+BEGIN
+    IF EXISTS (SELECT 1 FROM COBROS co WHERE co.movimiento = NEW.movimiento) THEN
+        RAISE EXCEPTION 'El movimiento ya esta registrado como cobro, no puede ser tambien un pago';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_2_PAGOS_bi
+    BEFORE INSERT ON PAGOS
+    FOR EACH ROW
+    EXECUTE FUNCTION fc_tg_2_PAGOS_bi();
+
+
+CREATE OR REPLACE FUNCTION fc_tg_1_COBROS_biu() RETURNS TRIGGER AS
+$$
+BEGIN
+    IF EXISTS (SELECT 1 FROM PAGOS pg WHERE pg.movimiento = NEW.movimiento) THEN
+        RAISE EXCEPTION 'El movimiento ya esta registrado como pago, no puede ser tambien un cobro';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_1_COBROS_biu
+    BEFORE INSERT OR UPDATE OF movimiento ON COBROS
+    FOR EACH ROW
+    EXECUTE FUNCTION fc_tg_1_COBROS_biu();
+
     --XDisparadores
 -- ALTER TABLE SERVICIOS ALTER COLUMN fecha_inicio DROP DEFAULT;
 -- ALTER TABLE SERVICIOS ALTER COLUMN estado DROP DEFAULT;
@@ -645,6 +810,25 @@ CREATE TRIGGER tg_2_SERVICIOS_bd
 -- DROP FUNCTION IF EXISTS fc_tg_1_SERVICIOS_bu();
 -- DROP FUNCTION IF EXISTS fc_tg_1_SERVICIOS_au();
 -- DROP FUNCTION IF EXISTS fc_tg_2_SERVICIOS_bd();
+
+-- DROP TRIGGER IF EXISTS tg_1_COBROS_biu ON COBROS;
+-- DROP TRIGGER IF EXISTS tg_2_PAGOS_bi ON PAGOS;
+-- DROP FUNCTION IF EXISTS fc_tg_1_COBROS_biu();
+-- DROP FUNCTION IF EXISTS fc_tg_2_PAGOS_bi();
+
+-- DROP TRIGGER IF EXISTS tg_1_PAGOS_bud ON PAGOS;
+-- DROP TRIGGER IF EXISTS tg_2_DETALLE_COMPRAS_bi ON DETALLE_COMPRAS;
+-- DROP TRIGGER IF EXISTS tg_1_DETALLE_COMPRAS_biud ON DETALLE_COMPRAS;
+-- DROP TRIGGER IF EXISTS tg_1_COMPRAS_bi ON COMPRAS;
+-- DROP TRIGGER IF EXISTS tg_1_COMPRAS_bu ON COMPRAS;
+-- DROP FUNCTION IF EXISTS fc_tg_1_PAGOS_bud();
+-- DROP FUNCTION IF EXISTS fc_tg_2_DETALLE_COMPRAS_bi();
+-- DROP FUNCTION IF EXISTS fc_tg_1_DETALLE_COMPRAS_biud();
+-- DROP FUNCTION IF EXISTS fc_tg_1_COMPRAS_bi();
+-- DROP FUNCTION IF EXISTS fc_tg_1_COMPRAS_bu();
+-- ALTER TABLE COMPRAS ALTER COLUMN fecha DROP DEFAULT;
+-- ALTER TABLE COMPRAS ALTER COLUMN numero DROP DEFAULT;
+-- DROP SEQUENCE IF EXISTS SQ_COMPRAS_numero;
 
 --Indices
 --CRUD de Servicios: las ordenes se buscan por sede y estado 
@@ -707,9 +891,10 @@ FROM (
                         JOIN COMPRAS co ON co.numero = pg.compra
                         WHERE co.sede = se.numero AND m.estado = 'P'
                         AND TO_CHAR(m.fecha, 'YYYY-MM') = me.mes), 0) AS totalCompras,
-            COALESCE((SELECT SUM(e.salario) -- la suma de los salarios de todos lo empleados ese mes
+            COALESCE((SELECT SUM(e.salario) -- la suma de los salarios de los empleados que ya trabajaban ese mes
                         FROM EMPLEADOS e
-                        WHERE e.sede = se.numero), 0) AS totalSalarios
+                        WHERE e.sede = se.numero
+                        AND TO_CHAR(e.fecha_ingreso, 'YYYY-MM') <= me.mes), 0) AS totalSalarios
     FROM SEDES se
     -- arma la tabla de combinaciones sede × mes
     CROSS JOIN (SELECT DISTINCT TO_CHAR(m.fecha, 'YYYY-MM') AS mes
@@ -875,6 +1060,9 @@ INSERT INTO COMPRAS (numero, fecha, sede, proveedor) VALUES
     ('C01', '2024-03-20', 'S01', '900123456'),
     ('C02', '2025-02-11', 'S02', '900654321'),
     ('C03', '2026-08-20', 'S01', '900654321');
+
+SELECT setval('SQ_COMPRAS_numero',
+                (SELECT COALESCE(MAX(SUBSTRING(numero FROM 2)::INTEGER), 0) + 1 FROM COMPRAS), false);
 
 INSERT INTO DETALLE_COMPRAS (cantidad, precio_unidad, compra, repuesto) VALUES
     (30, 20000.00, 'C01', 'R001'),
@@ -1336,6 +1524,180 @@ END;
 $$ LANGUAGE plpgsql;
 
 
+
+
+CREATE SCHEMA SV_COMPRAS;
+
+CREATE OR REPLACE FUNCTION SV_COMPRAS.ad(gerente VARCHAR, proveedor VARCHAR)
+RETURNS VARCHAR AS $$
+DECLARE
+    sede_gerente VARCHAR;
+    new_compra VARCHAR;
+BEGIN
+    SELECT e.sede INTO sede_gerente
+    FROM EMPLEADOS e
+    WHERE e.persona = ad.gerente AND e.cargo = 'G';
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'El empleado no es gerente de ninguna sede';
+    END IF;
+
+    INSERT INTO COMPRAS(sede, proveedor)
+    VALUES(sede_gerente, ad.proveedor)
+    RETURNING numero INTO new_compra;
+    RETURN new_compra;
+END;
+$$ LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE FUNCTION SV_COMPRAS.up(gerente VARCHAR, numero VARCHAR, proveedor VARCHAR)
+RETURNS VOID AS $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM COMPRAS c
+                    JOIN EMPLEADOS e ON e.sede = c.sede
+                    WHERE c.numero = up.numero
+                        AND e.persona = up.gerente AND e.cargo = 'G') THEN
+        RAISE EXCEPTION 'La compra no existe o no pertenece a la sede del gerente';
+    END IF;
+
+    UPDATE COMPRAS c
+    SET proveedor = COALESCE(up.proveedor, c.proveedor)
+    WHERE c.numero = up.numero;
+END;
+$$ LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE FUNCTION SV_COMPRAS.de(gerente VARCHAR, numero VARCHAR)
+RETURNS VOID AS $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM COMPRAS c
+                    JOIN EMPLEADOS e ON e.sede = c.sede
+                    WHERE c.numero = de.numero
+                        AND e.persona = de.gerente AND e.cargo = 'G') THEN
+        RAISE EXCEPTION 'La compra no existe o no pertenece a la sede del gerente';
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM PAGOS pg WHERE pg.compra = de.numero) THEN
+        RAISE EXCEPTION 'La compra ya tiene pago y no se puede eliminar';
+    END IF;
+
+    DELETE FROM COMPRAS c WHERE c.numero = de.numero;
+END;
+$$ LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE FUNCTION SV_COMPRAS.ad_detalle(gerente VARCHAR, compra VARCHAR, repuesto VARCHAR, cantidad INTEGER, precio_unidad NUMERIC)
+RETURNS VOID AS $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM COMPRAS c
+                    JOIN EMPLEADOS e ON e.sede = c.sede
+                    WHERE c.numero = ad_detalle.compra
+                        AND e.persona = ad_detalle.gerente AND e.cargo = 'G') THEN
+        RAISE EXCEPTION 'La compra no existe o no pertenece a la sede del gerente';
+    END IF;
+
+    INSERT INTO DETALLE_COMPRAS(cantidad, precio_unidad, compra, repuesto)
+    VALUES(ad_detalle.cantidad, ad_detalle.precio_unidad, ad_detalle.compra, ad_detalle.repuesto);
+END;
+$$ LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE FUNCTION SV_COMPRAS.up_detalle(gerente VARCHAR, compra VARCHAR, repuesto VARCHAR, cantidad INTEGER, precio_unidad NUMERIC)
+RETURNS VOID AS $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM COMPRAS c
+                    JOIN EMPLEADOS e ON e.sede = c.sede
+                    WHERE c.numero = up_detalle.compra
+                        AND e.persona = up_detalle.gerente AND e.cargo = 'G') THEN
+        RAISE EXCEPTION 'La compra no existe o no pertenece a la sede del gerente';
+    END IF;
+
+    UPDATE DETALLE_COMPRAS dc
+    SET cantidad = COALESCE(up_detalle.cantidad, dc.cantidad),
+        precio_unidad = COALESCE(up_detalle.precio_unidad, dc.precio_unidad)
+    WHERE dc.compra = up_detalle.compra AND dc.repuesto = up_detalle.repuesto;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'El detalle no pertenece a la compra';
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE FUNCTION SV_COMPRAS.de_detalle(gerente VARCHAR, compra VARCHAR, repuesto VARCHAR)
+RETURNS VOID AS $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM COMPRAS c
+                    JOIN EMPLEADOS e ON e.sede = c.sede
+                    WHERE c.numero = de_detalle.compra
+                        AND e.persona = de_detalle.gerente AND e.cargo = 'G') THEN
+        RAISE EXCEPTION 'La compra no existe o no pertenece a la sede del gerente';
+    END IF;
+
+    DELETE FROM DETALLE_COMPRAS dc
+    WHERE dc.compra = de_detalle.compra AND dc.repuesto = de_detalle.repuesto;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'El detalle no pertenece a la compra';
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+
+/* Valor total de una compra (atributo derivado /valorTotal):
+la suma de (cantidad x precio por unidad) de sus detalles. */
+CREATE OR REPLACE FUNCTION SV_COMPRAS.co_valorTotal(empleado VARCHAR, numero VARCHAR)
+RETURNS NUMERIC AS $$
+DECLARE
+    total NUMERIC;
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM COMPRAS c
+                    JOIN EMPLEADOS e ON e.sede = c.sede
+                    WHERE c.numero = co_valorTotal.numero
+                        AND e.persona = co_valorTotal.empleado) THEN
+        RAISE EXCEPTION 'La compra no existe o no pertenece a la sede del empleado';
+    END IF;
+
+    SELECT COALESCE(SUM(dc.cantidad * dc.precio_unidad), 0) INTO total
+    FROM DETALLE_COMPRAS dc
+    WHERE dc.compra = co_valorTotal.numero;
+
+    RETURN total;
+END;
+$$ LANGUAGE plpgsql;
+
+
+/* COMO empleado
+QUIERO conocer los repuestos cuyas existencias en mi sede estan por agotarse
+PARA PODER avisar u ordenar un traslado o una compra antes de quedarnos sin ese repuesto
+-
+Detalle
+C: Numero de serie y nombre del repuesto, cantidad disponible
+(compras + traslados que llegan - traslados que salen - consumos),
+cantidad usada y consumo mensual promedio.
+F: Sede del empleado que consulta.
+O: De menor a mayor por cantidad disponible.
+ */
+CREATE OR REPLACE FUNCTION SV_COMPRAS.co_porAgotarse(empleado VARCHAR)
+RETURNS REFCURSOR AS $$
+DECLARE
+    cur REFCURSOR := 'co_porAgotarse';
+BEGIN
+    OPEN cur FOR
+        SELECT  ra.serie,
+                ra.nombre,
+                ra.cantidadDisponible,
+                ra.cantidadUsada,
+                ra.consumoMensualPromedio
+        FROM REPUESTOS_POR_AGOTARSE ra
+        JOIN EMPLEADOS e ON e.sede = ra.sede
+        WHERE e.persona = co_porAgotarse.empleado
+        ORDER BY ra.cantidadDisponible ASC;
+    RETURN cur;
+END;
+$$ LANGUAGE plpgsql;
+
+
 --XComponentes
 /*
 DROP FUNCTION IF EXISTS SV_SERVICIOS.ad(VARCHAR, VARCHAR);
@@ -1347,6 +1709,16 @@ DROP FUNCTION IF EXISTS SV_SERVICIOS.co_valorTotal(VARCHAR, VARCHAR);
 DROP FUNCTION IF EXISTS SV_SERVICIOS.co_enProceso(VARCHAR);
 DROP FUNCTION IF EXISTS SV_SERVICIOS.co_estado(VARCHAR);
 DROP SCHEMA IF EXISTS SV_SERVICIOS;
+
+DROP FUNCTION IF EXISTS SV_COMPRAS.ad(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_COMPRAS.up(VARCHAR, VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_COMPRAS.de(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_COMPRAS.ad_detalle(VARCHAR, VARCHAR, VARCHAR, INTEGER, NUMERIC);
+DROP FUNCTION IF EXISTS SV_COMPRAS.up_detalle(VARCHAR, VARCHAR, VARCHAR, INTEGER, NUMERIC);
+DROP FUNCTION IF EXISTS SV_COMPRAS.de_detalle(VARCHAR, VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_COMPRAS.co_valorTotal(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_COMPRAS.co_porAgotarse(VARCHAR);
+DROP SCHEMA IF EXISTS SV_COMPRAS;
 */
 
 
@@ -1387,6 +1759,37 @@ SELECT servicio, item, estado FROM DETALLE_ORDENES WHERE servicio = (SELECT MAX(
 BEGIN;
 SELECT SV_SERVICIOS.co_enProceso('3030303030');
 FETCH ALL IN "co_enProceso";
+COMMIT;
+
+-- Caso 9: La gerente de S01 (3030303030) abre una compra al proveedor 900123456.
+-- Queda en la sede de la gerente, con el numero consecutivo C000000004 y la fecha de hoy
+SELECT SV_COMPRAS.ad('3030303030', '900123456');
+SELECT * FROM COMPRAS WHERE numero = 'C000000004';
+
+-- Caso 10: Se agregan 20 filtros de aceite (R001) sin indicar precio.
+-- Se toma el precio de referencia del proveedor (20000)
+SELECT SV_COMPRAS.ad_detalle('3030303030', 'C000000004', 'R001', 20, NULL);
+
+-- Caso 11: Se corrige el detalle: son 25 unidades a 19000
+SELECT SV_COMPRAS.up_detalle('3030303030', 'C000000004', 'R001', 25, 19000);
+SELECT * FROM DETALLE_COMPRAS WHERE compra = 'C000000004';
+
+-- Caso 12: El tecnico 2020202020 (S01) consulta el valor total de la compra: 25 x 19000 = 475000
+SELECT SV_COMPRAS.co_valorTotal('2020202020', 'C000000004');
+
+-- Caso 13: La gerente de S02 abre la compra C000000005 por error, le agrega un detalle,
+-- quita el detalle y elimina la compra
+SELECT SV_COMPRAS.ad('8080808080', '900654321');
+SELECT SV_COMPRAS.ad_detalle('8080808080', 'C000000005', 'R002', 5, 44000);
+SELECT SV_COMPRAS.de_detalle('8080808080', 'C000000005', 'R002');
+SELECT SV_COMPRAS.de('8080808080', 'C000000005');
+SELECT COUNT(*) AS comprasC5 FROM COMPRAS WHERE numero = 'C000000005';
+
+-- Caso 14: Repuestos por agotarse en la sede de la gerente 3030303030 (S01).
+-- Los filtros de aceite ya incluyen las 25 unidades de la compra C000000004
+BEGIN;
+SELECT SV_COMPRAS.co_porAgotarse('3030303030');
+FETCH ALL IN "co_porAgotarse";
 COMMIT;
 
 
@@ -1435,6 +1838,70 @@ SELECT SV_SERVICIOS.ad_detalle('8080808080', 'OS26-00000001', 'CS01', NULL);
 -- Caso 11: El item 1 de OS26-00000001 es de 2020202020; otro tecnico no lo puede modificar
 -- up_detalle lanza 'El detalle no existe o no esta asignado al tecnico'
 SELECT SV_SERVICIOS.up_detalle('5050505050', 'OS26-00000001', 1, 'F', 1);
+
+-- Caso 12: El tecnico 2020202020 no registra compras
+-- ad lanza 'El empleado no es gerente de ninguna sede'
+SELECT SV_COMPRAS.ad('2020202020', '900123456');
+
+-- Caso 13: El proveedor 900123456 no tiene precio de referencia para las pastillas (R002) y no se indica precio
+-- tg_2_DETALLE_COMPRAS_bi lanza 'Se debe indicar el precio por unidad, el proveedor no tiene precio de referencia para ese repuesto'
+SELECT SV_COMPRAS.ad_detalle('3030303030', 'C000000004', 'R002', 1, NULL);
+
+-- Caso 14: La compra C01 ya tiene pago
+-- tg_1_DETALLE_COMPRAS_biud lanza 'La compra ya tiene pago y no se puede modificar'
+SELECT SV_COMPRAS.ad_detalle('3030303030', 'C01', 'R001', 5, NULL);
+
+-- Caso 15: El repuesto R001 ya esta en la compra C000000004
+-- PK_DETALLE_COMPRAS rechaza el insert
+SELECT SV_COMPRAS.ad_detalle('3030303030', 'C000000004', 'R001', 5, NULL);
+
+-- Caso 16: La cantidad comprada debe ser mayor a cero
+-- CK_DETALLE_COMPRAS_CANTIDAD rechaza el update
+SELECT SV_COMPRAS.up_detalle('3030303030', 'C000000004', 'R001', 0, NULL);
+
+-- Caso 17: La compra C01 ya tiene pago, no se puede eliminar
+-- de lanza 'La compra ya tiene pago y no se puede eliminar' (y FK_PAGOS_COMPRA rechaza el DELETE directo)
+SELECT SV_COMPRAS.de('3030303030', 'C01');
+
+-- Caso 18: La compra C000000004 ya tiene detalles, no se le puede cambiar el proveedor
+-- tg_1_COMPRAS_bu lanza 'No se puede cambiar el proveedor de una compra que ya tiene detalles'
+SELECT SV_COMPRAS.up('3030303030', 'C000000004', '900654321');
+
+-- Caso 19: Un tecnico no modifica compras, aunque sean de su sede
+-- up_detalle lanza 'La compra no existe o no pertenece a la sede del gerente'
+SELECT SV_COMPRAS.up_detalle('2020202020', 'C000000004', 'R001', 1, NULL);
+
+-- Caso 20: La gerente de S02 no puede eliminar una compra de S01
+-- de lanza 'La compra no existe o no pertenece a la sede del gerente'
+SELECT SV_COMPRAS.de('8080808080', 'C000000004');
+
+-- Caso 21: El tecnico 6060606060 (S02) no consulta compras de otra sede
+-- co_valorTotal lanza 'La compra no existe o no pertenece a la sede del empleado'
+SELECT SV_COMPRAS.co_valorTotal('6060606060', 'C000000004');
+
+-- Caso 22: La fecha de una compra no se modifica (UPDATE directo)
+-- tg_1_COMPRAS_bu lanza 'De una compra solo se puede modificar el proveedor'
+UPDATE COMPRAS SET fecha = '2026-01-01' WHERE numero = 'C000000004';
+
+-- Caso 23: Aunque lo haga el administrador, no se borran detalles de una compra pagada (DELETE directo)
+-- tg_1_DETALLE_COMPRAS_biud lanza 'La compra ya tiene pago y no se puede modificar'
+DELETE FROM DETALLE_COMPRAS WHERE compra = 'C01';
+
+-- Caso 24: Los pagos no se borran (DELETE directo); si se pudiera, la compra C01 quedaria otra vez modificable
+-- tg_1_PAGOS_bud lanza 'Los pagos no se pueden modificar ni eliminar'
+DELETE FROM PAGOS WHERE compra = 'C01';
+
+-- Caso 25: La fecha de una compra no puede ser futura (INSERT directo)
+-- tg_1_COMPRAS_bi lanza 'La fecha de la compra no puede ser futura'
+INSERT INTO COMPRAS (numero, fecha, sede, proveedor) VALUES ('C99', '2099-01-01', 'S01', '900123456');
+
+-- Caso 26: El movimiento M01 ya es el cobro de la orden OS26-00000002; no puede ser tambien el pago de una compra
+-- tg_2_PAGOS_bi lanza 'El movimiento ya esta registrado como cobro, no puede ser tambien un pago'
+INSERT INTO PAGOS (movimiento, fecha_pago, compra) VALUES ('M01', '2026-09-15', 'C000000004');
+
+-- Caso 27: El movimiento M02 ya es el pago de la compra C01; no puede ser tambien el cobro de una orden
+-- tg_1_COBROS_biu lanza 'El movimiento ya esta registrado como pago, no puede ser tambien un cobro'
+INSERT INTO COBROS (movimiento, medio_pago, fecha_expedido, orden) VALUES ('M02', 'E', '2026-11-03', 'OS26-00000001');
 */
 
 
@@ -1500,6 +1967,71 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
 
+
+
+
+CREATE OR REPLACE FUNCTION SV_GERENTE.ad_c(gerente VARCHAR, proveedor VARCHAR)
+RETURNS VARCHAR AS $$
+BEGIN
+    RETURN SV_COMPRAS.ad(ad_c.gerente, ad_c.proveedor);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+CREATE OR REPLACE FUNCTION SV_GERENTE.up_c(gerente VARCHAR, numero VARCHAR, proveedor VARCHAR)
+RETURNS VOID AS $$
+BEGIN
+    PERFORM SV_COMPRAS.up(up_c.gerente, up_c.numero, up_c.proveedor);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+CREATE OR REPLACE FUNCTION SV_GERENTE.de_c(gerente VARCHAR, numero VARCHAR)
+RETURNS VOID AS $$
+BEGIN
+    PERFORM SV_COMPRAS.de(de_c.gerente, de_c.numero);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+CREATE OR REPLACE FUNCTION SV_GERENTE.ad_dc(gerente VARCHAR, compra VARCHAR, repuesto VARCHAR, cantidad INTEGER, precio_unidad NUMERIC)
+RETURNS VOID AS $$
+BEGIN
+    PERFORM SV_COMPRAS.ad_detalle(ad_dc.gerente, ad_dc.compra, ad_dc.repuesto, ad_dc.cantidad, ad_dc.precio_unidad);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+CREATE OR REPLACE FUNCTION SV_GERENTE.up_dc(gerente VARCHAR, compra VARCHAR, repuesto VARCHAR, cantidad INTEGER, precio_unidad NUMERIC)
+RETURNS VOID AS $$
+BEGIN
+    PERFORM SV_COMPRAS.up_detalle(up_dc.gerente, up_dc.compra, up_dc.repuesto, up_dc.cantidad, up_dc.precio_unidad);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+CREATE OR REPLACE FUNCTION SV_GERENTE.de_dc(gerente VARCHAR, compra VARCHAR, repuesto VARCHAR)
+RETURNS VOID AS $$
+BEGIN
+    PERFORM SV_COMPRAS.de_detalle(de_dc.gerente, de_dc.compra, de_dc.repuesto);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+CREATE OR REPLACE FUNCTION SV_GERENTE.co_vtc(gerente VARCHAR, numero VARCHAR)
+RETURNS NUMERIC AS $$
+BEGIN
+    RETURN SV_COMPRAS.co_valorTotal(co_vtc.gerente, co_vtc.numero);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+CREATE OR REPLACE FUNCTION SV_GERENTE.co_pa(gerente VARCHAR)
+RETURNS REFCURSOR AS $$
+BEGIN
+    RETURN SV_COMPRAS.co_porAgotarse(co_pa.gerente);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
 
@@ -1570,6 +2102,22 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
 
+CREATE OR REPLACE FUNCTION SV_TECNICO.co_vtc(tecnico VARCHAR, numero VARCHAR)
+RETURNS NUMERIC AS $$
+BEGIN
+    RETURN SV_COMPRAS.co_valorTotal(co_vtc.tecnico, co_vtc.numero);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+CREATE OR REPLACE FUNCTION SV_TECNICO.co_pa(tecnico VARCHAR)
+RETURNS REFCURSOR AS $$
+BEGIN
+    RETURN SV_COMPRAS.co_porAgotarse(co_pa.tecnico);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
 
 --Seguridad
 -- Las funciones de rol no funcionan el la DB de la Universidad
@@ -1605,6 +2153,16 @@ DROP FUNCTION IF EXISTS SV_TECNICO.co_ep(VARCHAR);
 DROP FUNCTION IF EXISTS SV_TECNICO.co_es(VARCHAR);
 DROP FUNCTION IF EXISTS SV_TECNICO.co_vt(VARCHAR, VARCHAR);
 DROP FUNCTION IF EXISTS SV_TECNICO.up_t(VARCHAR, VARCHAR, INTEGER, VARCHAR, NUMERIC);
+DROP FUNCTION IF EXISTS SV_GERENTE.ad_c(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_GERENTE.up_c(VARCHAR, VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_GERENTE.de_c(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_GERENTE.ad_dc(VARCHAR, VARCHAR, VARCHAR, INTEGER, NUMERIC);
+DROP FUNCTION IF EXISTS SV_GERENTE.up_dc(VARCHAR, VARCHAR, VARCHAR, INTEGER, NUMERIC);
+DROP FUNCTION IF EXISTS SV_GERENTE.de_dc(VARCHAR, VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_GERENTE.co_vtc(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_GERENTE.co_pa(VARCHAR);
+DROP FUNCTION IF EXISTS SV_TECNICO.co_vtc(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_TECNICO.co_pa(VARCHAR);
 
 DROP SCHEMA IF EXISTS SV_GERENTE;
 DROP SCHEMA IF EXISTS SV_TECNICO;
@@ -1652,6 +2210,35 @@ FETCH ALL IN "co_estado";
 COMMIT;
 
 
+-- Cuenta: Gerente
+
+-- Caso 8: La gerente de S02 abre una compra al proveedor 900654321.
+-- La sede se toma de la gerente y se asigna el numero C000000006
+SELECT SV_GERENTE.ad_c('8080808080', '900654321');
+
+-- Caso 9: Le agrega 8 pastillas de freno (R002) al precio de referencia (45000)
+SELECT SV_GERENTE.ad_dc('8080808080', 'C000000006', 'R002', 8, NULL);
+
+-- Caso 10: Consulta el valor total de la compra: 8 x 45000 = 360000
+SELECT SV_GERENTE.co_vtc('8080808080', 'C000000006');
+
+-- Caso 11: La gerente de S01 sube a 30 las unidades de su compra C000000004
+SELECT SV_GERENTE.up_dc('3030303030', 'C000000004', 'R001', 30, NULL);
+SELECT SV_GERENTE.co_vtc('3030303030', 'C000000004');
+
+
+-- Cuenta: Tecnico
+
+-- Caso 12: El tecnico 6060606060 consulta los repuestos por agotarse en su sede (S02)
+BEGIN;
+SELECT SV_TECNICO.co_pa('6060606060');
+FETCH ALL IN "co_porAgotarse";
+COMMIT;
+
+-- Caso 13: Consulta el valor total de la compra C000000006 de su sede: 360000
+SELECT SV_TECNICO.co_vtc('6060606060', 'C000000006');
+
+
 
 --SeguridadNoOK
 /*
@@ -1678,4 +2265,31 @@ SELECT SV_GERENTE.ad_s('3030303030', 'ABC123');
 -- Caso 6: No puede registrar trabajo en un detalle asignado a otro tecnico
 SELECT SV_TECNICO.up_t('5050505050', 'OS26-00000001', 3, 'F', 1);
 
+-- Cuenta: Gerente
+
+-- Caso 7: No puede saltarse los servicios y leer la tabla directamente
+SELECT * FROM COMPRAS;
+
+-- Caso 8: No puede usar el componente directamente
+SELECT SV_COMPRAS.de('3030303030', 'C000000004');
+
+-- Caso 9: La gerente de S02 no puede modificar una compra de S01
+SELECT SV_GERENTE.up_dc('8080808080', 'C000000004', 'R001', 1, NULL);
+
+-- Caso 10: La gerente de S02 no puede eliminar una compra de S01
+SELECT SV_GERENTE.de_c('8080808080', 'C000000004');
+
+
+-- Cuenta: Tecnico
+
+-- Caso 11: El tecnico no registra compras: no puede usar los servicios del gerente
+SELECT SV_GERENTE.ad_c('3030303030', '900123456');
+
+-- Caso 12: No puede consultar compras de otra sede (6060606060 es de S02, C000000004 de S01)
+SELECT SV_TECNICO.co_vtc('6060606060', 'C000000004');
+
+
 */
+
+
+
