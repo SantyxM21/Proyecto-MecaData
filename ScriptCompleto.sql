@@ -561,7 +561,8 @@ CREATE TRIGGER tg_1_SERVICIOS_bi
 
     --Modificar
 --De un servicio solo se modifica el estado, y solo mientras esta en proceso: se finaliza o se cancela.
---El numero, la fecha de inicio, el vehiculo y la sede no cambian; la fecha de fin se asigna al finalizar o cancelar.
+--El numero, la fecha de inicio, el vehiculo y la sede no cambian. Un servicio no se finaliza si tiene detalles en proceso.
+--Al finalizar o cancelar se puede indicar la fecha de fin si no se indica, es la de hoy.
 CREATE OR REPLACE FUNCTION fc_tg_1_SERVICIOS_bu() RETURNS TRIGGER AS
 $$
 BEGIN
@@ -575,14 +576,23 @@ BEGIN
 
     IF NEW.numero IS DISTINCT FROM OLD.numero
         OR NEW.fecha_inicio IS DISTINCT FROM OLD.fecha_inicio
-        OR NEW.fecha_fin IS DISTINCT FROM OLD.fecha_fin
         OR NEW.vehiculo IS DISTINCT FROM OLD.vehiculo
-        OR NEW.sede IS DISTINCT FROM OLD.sede THEN
+        OR NEW.sede IS DISTINCT FROM OLD.sede
+        OR (NEW.estado = 'E' AND NEW.fecha_fin IS DISTINCT FROM OLD.fecha_fin) THEN
         RAISE EXCEPTION 'De un servicio solo se puede modificar el estado';
     END IF;
 
+    IF NEW.estado = 'F'
+        AND EXISTS (SELECT 1 FROM DETALLE_ORDENES d WHERE d.servicio = NEW.numero AND d.estado = 'E') THEN
+        RAISE EXCEPTION 'No se puede finalizar un servicio con detalles en proceso';
+    END IF;
+
     IF NEW.estado IN ('F', 'C') THEN
-        NEW.fecha_fin := CURRENT_DATE;
+        IF NEW.fecha_fin IS NULL THEN
+            NEW.fecha_fin := CURRENT_DATE;
+        ELSIF NEW.fecha_fin > CURRENT_DATE THEN
+            RAISE EXCEPTION 'La fecha de fin del servicio no puede ser futura';
+        END IF;
     END IF;
 
     RETURN NEW;
@@ -628,6 +638,88 @@ CREATE TRIGGER tg_2_SERVICIOS_bd
     BEFORE DELETE ON SERVICIOS
     FOR EACH ROW
     EXECUTE FUNCTION fc_tg_2_SERVICIOS_bd();
+
+
+    --DETALLE_ORDENES
+--Los detalles solo se agregan, modifican o eliminan mientras el servicio esta en proceso
+--(salvo cuando se cancela el servicio y sus detalles en proceso pasan a cancelados).
+--Solo se agregan servicios del catalogo que la sede tiene habilitados.
+--Del detalle no cambian el servicio, el item, el servicio del catalogo ni el valor cobrado.
+--El tecnico del detalle debe trabajar en la sede del servicio.
+CREATE OR REPLACE FUNCTION fc_tg_1_DETALLE_ORDENES_biud() RETURNS TRIGGER AS
+$$
+DECLARE
+    estado_servicio VARCHAR;
+    sede_servicio VARCHAR;
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        SELECT s.estado INTO estado_servicio FROM SERVICIOS s WHERE s.numero = OLD.servicio;
+        IF estado_servicio <> 'E' THEN
+            RAISE EXCEPTION 'Solo se pueden modificar los detalles de los servicios en proceso';
+        END IF;
+        RETURN OLD;
+    END IF;
+
+    SELECT s.estado, s.sede INTO estado_servicio, sede_servicio FROM SERVICIOS s WHERE s.numero = NEW.servicio;
+
+    IF TG_OP = 'INSERT' THEN
+        IF estado_servicio <> 'E' THEN
+            RAISE EXCEPTION 'Solo se pueden agregar detalles a los servicios en proceso';
+        END IF;
+
+        IF NOT EXISTS (SELECT 1 FROM OFERTAS_SERVICIOS o
+                        WHERE o.sede = sede_servicio
+                            AND o.catalogo_servicio = NEW.catalogo_servicio
+                            AND o.habilitado = TRUE) THEN
+            RAISE EXCEPTION 'La sede no tiene habilitado ese servicio del catalogo';
+        END IF;
+    ELSE
+        IF NEW.servicio IS DISTINCT FROM OLD.servicio
+            OR NEW.item IS DISTINCT FROM OLD.item
+            OR NEW.catalogo_servicio IS DISTINCT FROM OLD.catalogo_servicio
+            OR NEW.valor_cobrado IS DISTINCT FROM OLD.valor_cobrado THEN
+            RAISE EXCEPTION 'Del detalle no se puede cambiar el servicio, el item, el servicio del catalogo ni el valor cobrado';
+        END IF;
+
+        IF estado_servicio <> 'E'
+            AND NOT (estado_servicio = 'C' AND OLD.estado = 'E' AND NEW.estado = 'C') THEN
+            RAISE EXCEPTION 'Solo se pueden modificar los detalles de los servicios en proceso';
+        END IF;
+    END IF;
+
+    IF (TG_OP = 'INSERT' OR NEW.tecnico IS DISTINCT FROM OLD.tecnico)
+        AND EXISTS (SELECT 1 FROM EMPLEADOS e WHERE e.persona = NEW.tecnico AND e.sede <> sede_servicio) THEN
+        RAISE EXCEPTION 'El tecnico no trabaja en la sede del servicio';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_1_DETALLE_ORDENES_biud
+    BEFORE INSERT OR UPDATE OR DELETE ON DETALLE_ORDENES
+    FOR EACH ROW
+    EXECUTE FUNCTION fc_tg_1_DETALLE_ORDENES_biud();
+
+
+--El valor cobrado es el precio local de la sede si no tiene, el precio base del catalogo.
+CREATE OR REPLACE FUNCTION fc_tg_2_DETALLE_ORDENES_bi() RETURNS TRIGGER AS
+$$
+BEGIN
+    SELECT COALESCE(o.precio_local, cs.precio_base) INTO NEW.valor_cobrado
+    FROM SERVICIOS s
+    JOIN OFERTAS_SERVICIOS o ON o.sede = s.sede
+    JOIN CATALOGO_SERVICIOS cs ON cs.codigo = o.catalogo_servicio
+    WHERE s.numero = NEW.servicio AND o.catalogo_servicio = NEW.catalogo_servicio;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_2_DETALLE_ORDENES_bi
+    BEFORE INSERT ON DETALLE_ORDENES
+    FOR EACH ROW
+    EXECUTE FUNCTION fc_tg_2_DETALLE_ORDENES_bi();
 
 
     --COMPRAS
@@ -810,6 +902,11 @@ CREATE TRIGGER tg_1_COBROS_biu
 -- DROP FUNCTION IF EXISTS fc_tg_1_SERVICIOS_bu();
 -- DROP FUNCTION IF EXISTS fc_tg_1_SERVICIOS_au();
 -- DROP FUNCTION IF EXISTS fc_tg_2_SERVICIOS_bd();
+
+-- DROP TRIGGER IF EXISTS tg_2_DETALLE_ORDENES_bi ON DETALLE_ORDENES;
+-- DROP TRIGGER IF EXISTS tg_1_DETALLE_ORDENES_biud ON DETALLE_ORDENES;
+-- DROP FUNCTION IF EXISTS fc_tg_2_DETALLE_ORDENES_bi();
+-- DROP FUNCTION IF EXISTS fc_tg_1_DETALLE_ORDENES_biud();
 
 -- DROP TRIGGER IF EXISTS tg_1_COBROS_biu ON COBROS;
 -- DROP TRIGGER IF EXISTS tg_2_PAGOS_bi ON PAGOS;
@@ -1022,8 +1119,8 @@ INSERT INTO REPUESTOS (serie, tipo, nombre) VALUES
 
 INSERT INTO SERVICIOS (numero, fecha_inicio, fecha_fin, estado, vehiculo, sede) VALUES
     ('OS26-00000001', '2026-11-03', NULL, 'E', 'ABC123', 'S01'),
-    ('OS26-00000002', '2026-09-14', '2026-09-15', 'F', 'DEF456', 'S01'),
-    ('OS26-00000003', '2026-10-05', '2026-10-06', 'F', 'GHI789', 'S02'),
+    ('OS26-00000002', '2026-09-14', NULL, 'E', 'DEF456', 'S01'),
+    ('OS26-00000003', '2026-10-05', NULL, 'E', 'GHI789', 'S02'),
     ('OS26-00000004', '2026-10-20', '2026-10-21', 'C', 'GHI789', 'S02');
 
 SELECT setval('SQ_SERVICIOS_numero',
@@ -1035,6 +1132,9 @@ INSERT INTO DETALLE_ORDENES (item, valor_cobrado, estado, fecha_inicio, fecha_fi
         '{"sintomas": ["ruido al frenar", "pedal esponjoso"], "hallazgos": "Pastillas delanteras al 10% de vida util", "recomendaciones": ["cambiar discos en 5000 km"]}'),
     (1, 230000.00, 'F', '2026-10-05', '2026-10-06', 'CS02', 'OS26-00000003', '6060606060', 2.5,
         '{"sintomas": ["vibracion al frenar"], "hallazgos": "Pastillas cristalizadas"}');
+
+UPDATE SERVICIOS SET estado = 'F', fecha_fin = '2026-09-15' WHERE numero = 'OS26-00000002';
+UPDATE SERVICIOS SET estado = 'F', fecha_fin = '2026-10-06' WHERE numero = 'OS26-00000003';
 
 INSERT INTO CONSUMOS (cantidad, fecha_uso, precio, repuesto, servicio, item) VALUES
     (1, '2026-11-03', 25000.00, 'R001', 'OS26-00000001', 1),
@@ -1365,42 +1465,21 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION SV_SERVICIOS.ad_detalle(empleado VARCHAR, servicio VARCHAR, catalogo_servicio VARCHAR, tecnico VARCHAR)
 RETURNS INTEGER AS $$
 DECLARE
-    estado_servicio VARCHAR;
-    sede_servicio VARCHAR;
-    precio NUMERIC;
     new_item INTEGER;
 BEGIN
-    SELECT s.estado, s.sede INTO estado_servicio, sede_servicio
-    FROM SERVICIOS s
-    JOIN EMPLEADOS e ON e.sede = s.sede
-    WHERE s.numero = ad_detalle.servicio
-        AND e.persona = ad_detalle.empleado;
-
-    IF NOT FOUND THEN
+    IF NOT EXISTS (SELECT 1 FROM SERVICIOS s
+                    JOIN EMPLEADOS e ON e.sede = s.sede
+                    WHERE s.numero = ad_detalle.servicio
+                        AND e.persona = ad_detalle.empleado) THEN
         RAISE EXCEPTION 'El servicio no existe o no pertenece a la sede del empleado';
-    END IF;
-
-    IF estado_servicio <> 'E' THEN
-        RAISE EXCEPTION 'Solo se pueden agregar detalles a los servicios en proceso';
-    END IF;
-
-    SELECT COALESCE(o.precio_local, cs.precio_base) INTO precio
-    FROM OFERTAS_SERVICIOS o
-    JOIN CATALOGO_SERVICIOS cs ON cs.codigo = o.catalogo_servicio
-    WHERE o.sede = sede_servicio
-        AND o.catalogo_servicio = ad_detalle.catalogo_servicio
-        AND o.habilitado = TRUE;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'La sede no tiene habilitado ese servicio del catalogo';
     END IF;
 
     SELECT COALESCE(MAX(d.item), 0) + 1 INTO new_item
     FROM DETALLE_ORDENES d
     WHERE d.servicio = ad_detalle.servicio;
 
-    INSERT INTO DETALLE_ORDENES(item, valor_cobrado, estado, fecha_inicio, catalogo_servicio, servicio, tecnico)
-    VALUES(new_item, precio, 'E', CURRENT_DATE, ad_detalle.catalogo_servicio, ad_detalle.servicio, ad_detalle.tecnico);
+    INSERT INTO DETALLE_ORDENES(item, estado, fecha_inicio, catalogo_servicio, servicio, tecnico)
+    VALUES(new_item, 'E', CURRENT_DATE, ad_detalle.catalogo_servicio, ad_detalle.servicio, ad_detalle.tecnico);
     RETURN new_item;
 END;
 $$ LANGUAGE plpgsql;
@@ -1416,6 +1495,22 @@ BEGIN
     WHERE d.servicio = up_detalle.servicio
         AND d.item = up_detalle.item
         AND d.tecnico = up_detalle.tecnico;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'El detalle no existe o no esta asignado al tecnico';
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE FUNCTION SV_SERVICIOS.up_diagnostico(tecnico VARCHAR, servicio VARCHAR, item INTEGER, diagnostico JSONB)
+RETURNS VOID AS $$
+BEGIN
+    UPDATE DETALLE_ORDENES d
+    SET diagnostico = up_diagnostico.diagnostico
+    WHERE d.servicio = up_diagnostico.servicio
+        AND d.item = up_diagnostico.item
+        AND d.tecnico = up_diagnostico.tecnico;
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'El detalle no existe o no esta asignado al tecnico';
@@ -1705,6 +1800,7 @@ DROP FUNCTION IF EXISTS SV_SERVICIOS.up(VARCHAR, VARCHAR, VARCHAR);
 DROP FUNCTION IF EXISTS SV_SERVICIOS.ad_detalle(VARCHAR, VARCHAR, VARCHAR, VARCHAR);
 DROP FUNCTION IF EXISTS SV_SERVICIOS.de(VARCHAR, VARCHAR);
 DROP FUNCTION IF EXISTS SV_SERVICIOS.up_detalle(VARCHAR, VARCHAR, INTEGER, VARCHAR, NUMERIC);
+DROP FUNCTION IF EXISTS SV_SERVICIOS.up_diagnostico(VARCHAR, VARCHAR, INTEGER, JSONB);
 DROP FUNCTION IF EXISTS SV_SERVICIOS.co_valorTotal(VARCHAR, VARCHAR);
 DROP FUNCTION IF EXISTS SV_SERVICIOS.co_enProceso(VARCHAR);
 DROP FUNCTION IF EXISTS SV_SERVICIOS.co_estado(VARCHAR);
@@ -1808,11 +1904,11 @@ SELECT SV_SERVICIOS.up('3030303030', 'OS26-00000002', 'C');
 SELECT SV_SERVICIOS.de('8080808080', 'OS26-00000004');
 
 -- Caso 4: La sede S01 no tiene habilitado el servicio CS03
--- ad_detalle lanza 'La sede no tiene habilitado ese servicio del catalogo'
+-- tg_1_DETALLE_ORDENES_biud lanza 'La sede no tiene habilitado ese servicio del catalogo'
 SELECT SV_SERVICIOS.ad_detalle('3030303030', 'OS26-00000001', 'CS03', NULL);
 
 -- Caso 5: No se agregan detalles a un servicio finalizado (OS26-00000002)
--- ad_detalle lanza 'Solo se pueden agregar detalles a los servicios en proceso'
+-- tg_1_DETALLE_ORDENES_biud lanza 'Solo se pueden agregar detalles a los servicios en proceso'
 SELECT SV_SERVICIOS.ad_detalle('3030303030', 'OS26-00000002', 'CS01', NULL);
 
 -- Caso 6: El item 2 de OS26-00000001 no tiene horas trabajadas, no se puede finalizar
@@ -1839,67 +1935,87 @@ SELECT SV_SERVICIOS.ad_detalle('8080808080', 'OS26-00000001', 'CS01', NULL);
 -- up_detalle lanza 'El detalle no existe o no esta asignado al tecnico'
 SELECT SV_SERVICIOS.up_detalle('5050505050', 'OS26-00000001', 1, 'F', 1);
 
--- Caso 12: El tecnico 2020202020 no registra compras
+-- Caso 12: La orden OS26-00000001 tiene detalles en proceso, no se puede finalizar
+-- tg_1_SERVICIOS_bu lanza 'No se puede finalizar un servicio con detalles en proceso'
+SELECT SV_SERVICIOS.up('3030303030', 'OS26-00000001', 'F');
+
+-- Caso 13: El tecnico 6060606060 trabaja en S02, no se le puede asignar un detalle de una orden de S01
+-- tg_1_DETALLE_ORDENES_biud lanza 'El tecnico no trabaja en la sede del servicio'
+SELECT SV_SERVICIOS.ad_detalle('3030303030', 'OS26-00000001', 'CS01', '6060606060');
+
+-- Caso 14: No se agregan detalles a una orden finalizada (INSERT directo)
+-- tg_1_DETALLE_ORDENES_biud lanza 'Solo se pueden agregar detalles a los servicios en proceso'
+INSERT INTO DETALLE_ORDENES (item, estado, fecha_inicio, catalogo_servicio, servicio) VALUES (2, 'E', '2026-09-14', 'CS01', 'OS26-00000002');
+
+-- Caso 15: No se modifican los detalles de una orden finalizada (UPDATE directo)
+-- tg_1_DETALLE_ORDENES_biud lanza 'Solo se pueden modificar los detalles de los servicios en proceso'
+UPDATE DETALLE_ORDENES SET horas_trabajadas = 5 WHERE servicio = 'OS26-00000002' AND item = 1;
+
+-- Caso 16: El valor cobrado de un detalle no se cambia (UPDATE directo)
+-- tg_1_DETALLE_ORDENES_biud lanza 'Del detalle no se puede cambiar el servicio, el item, el servicio del catalogo ni el valor cobrado'
+UPDATE DETALLE_ORDENES SET valor_cobrado = 1 WHERE servicio = 'OS26-00000001' AND item = 1;
+
+-- Caso 17: El tecnico 2020202020 no registra compras
 -- ad lanza 'El empleado no es gerente de ninguna sede'
 SELECT SV_COMPRAS.ad('2020202020', '900123456');
 
--- Caso 13: El proveedor 900123456 no tiene precio de referencia para las pastillas (R002) y no se indica precio
+-- Caso 18: El proveedor 900123456 no tiene precio de referencia para las pastillas (R002) y no se indica precio
 -- tg_2_DETALLE_COMPRAS_bi lanza 'Se debe indicar el precio por unidad, el proveedor no tiene precio de referencia para ese repuesto'
 SELECT SV_COMPRAS.ad_detalle('3030303030', 'C000000004', 'R002', 1, NULL);
 
--- Caso 14: La compra C01 ya tiene pago
+-- Caso 19: La compra C01 ya tiene pago
 -- tg_1_DETALLE_COMPRAS_biud lanza 'La compra ya tiene pago y no se puede modificar'
 SELECT SV_COMPRAS.ad_detalle('3030303030', 'C01', 'R001', 5, NULL);
 
--- Caso 15: El repuesto R001 ya esta en la compra C000000004
+-- Caso 20: El repuesto R001 ya esta en la compra C000000004
 -- PK_DETALLE_COMPRAS rechaza el insert
 SELECT SV_COMPRAS.ad_detalle('3030303030', 'C000000004', 'R001', 5, NULL);
 
--- Caso 16: La cantidad comprada debe ser mayor a cero
+-- Caso 21: La cantidad comprada debe ser mayor a cero
 -- CK_DETALLE_COMPRAS_CANTIDAD rechaza el update
 SELECT SV_COMPRAS.up_detalle('3030303030', 'C000000004', 'R001', 0, NULL);
 
--- Caso 17: La compra C01 ya tiene pago, no se puede eliminar
+-- Caso 22: La compra C01 ya tiene pago, no se puede eliminar
 -- de lanza 'La compra ya tiene pago y no se puede eliminar' (y FK_PAGOS_COMPRA rechaza el DELETE directo)
 SELECT SV_COMPRAS.de('3030303030', 'C01');
 
--- Caso 18: La compra C000000004 ya tiene detalles, no se le puede cambiar el proveedor
+-- Caso 23: La compra C000000004 ya tiene detalles, no se le puede cambiar el proveedor
 -- tg_1_COMPRAS_bu lanza 'No se puede cambiar el proveedor de una compra que ya tiene detalles'
 SELECT SV_COMPRAS.up('3030303030', 'C000000004', '900654321');
 
--- Caso 19: Un tecnico no modifica compras, aunque sean de su sede
+-- Caso 24: Un tecnico no modifica compras, aunque sean de su sede
 -- up_detalle lanza 'La compra no existe o no pertenece a la sede del gerente'
 SELECT SV_COMPRAS.up_detalle('2020202020', 'C000000004', 'R001', 1, NULL);
 
--- Caso 20: La gerente de S02 no puede eliminar una compra de S01
+-- Caso 25: La gerente de S02 no puede eliminar una compra de S01
 -- de lanza 'La compra no existe o no pertenece a la sede del gerente'
 SELECT SV_COMPRAS.de('8080808080', 'C000000004');
 
--- Caso 21: El tecnico 6060606060 (S02) no consulta compras de otra sede
+-- Caso 26: El tecnico 6060606060 (S02) no consulta compras de otra sede
 -- co_valorTotal lanza 'La compra no existe o no pertenece a la sede del empleado'
 SELECT SV_COMPRAS.co_valorTotal('6060606060', 'C000000004');
 
--- Caso 22: La fecha de una compra no se modifica (UPDATE directo)
+-- Caso 27: La fecha de una compra no se modifica (UPDATE directo)
 -- tg_1_COMPRAS_bu lanza 'De una compra solo se puede modificar el proveedor'
 UPDATE COMPRAS SET fecha = '2026-01-01' WHERE numero = 'C000000004';
 
--- Caso 23: Aunque lo haga el administrador, no se borran detalles de una compra pagada (DELETE directo)
+-- Caso 28: Aunque lo haga el administrador, no se borran detalles de una compra pagada (DELETE directo)
 -- tg_1_DETALLE_COMPRAS_biud lanza 'La compra ya tiene pago y no se puede modificar'
 DELETE FROM DETALLE_COMPRAS WHERE compra = 'C01';
 
--- Caso 24: Los pagos no se borran (DELETE directo); si se pudiera, la compra C01 quedaria otra vez modificable
+-- Caso 29: Los pagos no se borran (DELETE directo); si se pudiera, la compra C01 quedaria otra vez modificable
 -- tg_1_PAGOS_bud lanza 'Los pagos no se pueden modificar ni eliminar'
 DELETE FROM PAGOS WHERE compra = 'C01';
 
--- Caso 25: La fecha de una compra no puede ser futura (INSERT directo)
+-- Caso 30: La fecha de una compra no puede ser futura (INSERT directo)
 -- tg_1_COMPRAS_bi lanza 'La fecha de la compra no puede ser futura'
 INSERT INTO COMPRAS (numero, fecha, sede, proveedor) VALUES ('C99', '2099-01-01', 'S01', '900123456');
 
--- Caso 26: El movimiento M01 ya es el cobro de la orden OS26-00000002; no puede ser tambien el pago de una compra
+-- Caso 31: El movimiento M01 ya es el cobro de la orden OS26-00000002; no puede ser tambien el pago de una compra
 -- tg_2_PAGOS_bi lanza 'El movimiento ya esta registrado como cobro, no puede ser tambien un pago'
 INSERT INTO PAGOS (movimiento, fecha_pago, compra) VALUES ('M01', '2026-09-15', 'C000000004');
 
--- Caso 27: El movimiento M02 ya es el pago de la compra C01; no puede ser tambien el cobro de una orden
+-- Caso 32: El movimiento M02 ya es el pago de la compra C01; no puede ser tambien el cobro de una orden
 -- tg_1_COBROS_biu lanza 'El movimiento ya esta registrado como pago, no puede ser tambien un cobro'
 INSERT INTO COBROS (movimiento, medio_pago, fecha_expedido, orden) VALUES ('M02', 'E', '2026-11-03', 'OS26-00000001');
 */
@@ -2101,6 +2217,14 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
+CREATE OR REPLACE FUNCTION SV_TECNICO.up_dg(tecnico VARCHAR, servicio VARCHAR, item INTEGER, diagnostico JSONB)
+RETURNS VOID AS $$
+BEGIN
+    PERFORM SV_SERVICIOS.up_diagnostico(up_dg.tecnico, up_dg.servicio, up_dg.item, up_dg.diagnostico);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
 
 CREATE OR REPLACE FUNCTION SV_TECNICO.co_vtc(tecnico VARCHAR, numero VARCHAR)
 RETURNS NUMERIC AS $$
@@ -2153,6 +2277,7 @@ DROP FUNCTION IF EXISTS SV_TECNICO.co_ep(VARCHAR);
 DROP FUNCTION IF EXISTS SV_TECNICO.co_es(VARCHAR);
 DROP FUNCTION IF EXISTS SV_TECNICO.co_vt(VARCHAR, VARCHAR);
 DROP FUNCTION IF EXISTS SV_TECNICO.up_t(VARCHAR, VARCHAR, INTEGER, VARCHAR, NUMERIC);
+DROP FUNCTION IF EXISTS SV_TECNICO.up_dg(VARCHAR, VARCHAR, INTEGER, JSONB);
 DROP FUNCTION IF EXISTS SV_GERENTE.ad_c(VARCHAR, VARCHAR);
 DROP FUNCTION IF EXISTS SV_GERENTE.up_c(VARCHAR, VARCHAR, VARCHAR);
 DROP FUNCTION IF EXISTS SV_GERENTE.de_c(VARCHAR, VARCHAR);
