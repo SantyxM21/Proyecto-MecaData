@@ -2026,58 +2026,58 @@ INSERT INTO COBROS (movimiento, medio_pago, fecha_expedido, orden) VALUES ('M02'
 --Actores
 CREATE SCHEMA SV_GERENTE;
 
-CREATE OR REPLACE FUNCTION SV_GERENTE.ad_s(gerente VARCHAR, vehiculo VARCHAR)
+CREATE OR REPLACE FUNCTION SV_GERENTE.ad_servicio(gerente VARCHAR, vehiculo VARCHAR)
 RETURNS VARCHAR AS $$
 BEGIN
-    RETURN SV_SERVICIOS.ad(ad_s.gerente, ad_s.vehiculo);
+    RETURN SV_SERVICIOS.ad(ad_servicio.gerente, ad_servicio.vehiculo);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
-CREATE OR REPLACE FUNCTION SV_GERENTE.up_s(gerente VARCHAR, numero VARCHAR, estado VARCHAR)
+CREATE OR REPLACE FUNCTION SV_GERENTE.up_servicio(gerente VARCHAR, numero VARCHAR, estado VARCHAR)
 RETURNS VOID AS $$
 BEGIN
-    PERFORM SV_SERVICIOS.up(up_s.gerente, up_s.numero, up_s.estado);
+    PERFORM SV_SERVICIOS.up(up_servicio.gerente, up_servicio.numero, up_servicio.estado);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
-CREATE OR REPLACE FUNCTION SV_GERENTE.de_s(gerente VARCHAR, numero VARCHAR)
+CREATE OR REPLACE FUNCTION SV_GERENTE.de_servicio(gerente VARCHAR, numero VARCHAR)
 RETURNS VOID AS $$
 BEGIN
-    PERFORM SV_SERVICIOS.de(de_s.gerente, de_s.numero);
+    PERFORM SV_SERVICIOS.de(de_servicio.gerente, de_servicio.numero);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
-CREATE OR REPLACE FUNCTION SV_GERENTE.ad_d(gerente VARCHAR, servicio VARCHAR, catalogo_servicio VARCHAR, tecnico VARCHAR)
+CREATE OR REPLACE FUNCTION SV_GERENTE.ad_detalle_servicio(gerente VARCHAR, servicio VARCHAR, catalogo_servicio VARCHAR, tecnico VARCHAR)
 RETURNS INTEGER AS $$
 BEGIN
-    RETURN SV_SERVICIOS.ad_detalle(ad_d.gerente, ad_d.servicio, ad_d.catalogo_servicio, ad_d.tecnico);
+    RETURN SV_SERVICIOS.ad_detalle(ad_detalle_servicio.gerente, ad_detalle_servicio.servicio, ad_detalle_servicio.catalogo_servicio, ad_detalle_servicio.tecnico);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
-CREATE OR REPLACE FUNCTION SV_GERENTE.co_vt(gerente VARCHAR, numero VARCHAR)
+CREATE OR REPLACE FUNCTION SV_GERENTE.co_valorTotalServicio(gerente VARCHAR, numero VARCHAR)
 RETURNS NUMERIC AS $$
 BEGIN
-    RETURN SV_SERVICIOS.co_valorTotal(co_vt.gerente, co_vt.numero);
+    RETURN SV_SERVICIOS.co_valorTotal(co_valorTotalServicio.gerente, co_valorTotalServicio.numero);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
-CREATE OR REPLACE FUNCTION SV_GERENTE.co_ep(gerente VARCHAR)
+CREATE OR REPLACE FUNCTION SV_GERENTE.co_serviciosEnProcesoSede(gerente VARCHAR)
 RETURNS REFCURSOR AS $$
 BEGIN
-    RETURN SV_SERVICIOS.co_enProceso(co_ep.gerente);
+    RETURN SV_SERVICIOS.co_enProceso(co_serviciosEnProcesoSede.gerente);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
-CREATE OR REPLACE FUNCTION SV_GERENTE.co_es(placa VARCHAR)
+CREATE OR REPLACE FUNCTION SV_GERENTE.co_estadoServicioVehiculo(placa VARCHAR)
 RETURNS REFCURSOR AS $$
 BEGIN
-    RETURN SV_SERVICIOS.co_estado(co_es.placa);
+    RETURN SV_SERVICIOS.co_estado(co_estadoServicioVehiculo.placa);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
@@ -2086,66 +2086,66 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
 
-CREATE OR REPLACE FUNCTION SV_GERENTE.ad_c(gerente VARCHAR, proveedor VARCHAR)
+CREATE OR REPLACE FUNCTION SV_GERENTE.ad_compra(gerente VARCHAR, proveedor VARCHAR)
 RETURNS VARCHAR AS $$
 BEGIN
-    RETURN SV_COMPRAS.ad(ad_c.gerente, ad_c.proveedor);
+    RETURN SV_COMPRAS.ad(ad_compra.gerente, ad_compra.proveedor);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
-CREATE OR REPLACE FUNCTION SV_GERENTE.up_c(gerente VARCHAR, numero VARCHAR, proveedor VARCHAR)
+CREATE OR REPLACE FUNCTION SV_GERENTE.up_compra(gerente VARCHAR, numero VARCHAR, proveedor VARCHAR)
 RETURNS VOID AS $$
 BEGIN
-    PERFORM SV_COMPRAS.up(up_c.gerente, up_c.numero, up_c.proveedor);
+    PERFORM SV_COMPRAS.up(up_compra.gerente, up_compra.numero, up_compra.proveedor);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
-CREATE OR REPLACE FUNCTION SV_GERENTE.de_c(gerente VARCHAR, numero VARCHAR)
+CREATE OR REPLACE FUNCTION SV_GERENTE.de_compra(gerente VARCHAR, numero VARCHAR)
 RETURNS VOID AS $$
 BEGIN
-    PERFORM SV_COMPRAS.de(de_c.gerente, de_c.numero);
+    PERFORM SV_COMPRAS.de(de_compra.gerente, de_compra.numero);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
-CREATE OR REPLACE FUNCTION SV_GERENTE.ad_dc(gerente VARCHAR, compra VARCHAR, repuesto VARCHAR, cantidad INTEGER, precio_unidad NUMERIC)
+CREATE OR REPLACE FUNCTION SV_GERENTE.ad_detalle_compra(gerente VARCHAR, compra VARCHAR, repuesto VARCHAR, cantidad INTEGER, precio_unidad NUMERIC)
 RETURNS VOID AS $$
 BEGIN
-    PERFORM SV_COMPRAS.ad_detalle(ad_dc.gerente, ad_dc.compra, ad_dc.repuesto, ad_dc.cantidad, ad_dc.precio_unidad);
+    PERFORM SV_COMPRAS.ad_detalle(ad_detalle_compra.gerente, ad_detalle_compra.compra, ad_detalle_compra.repuesto, ad_detalle_compra.cantidad, ad_detalle_compra.precio_unidad);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
-CREATE OR REPLACE FUNCTION SV_GERENTE.up_dc(gerente VARCHAR, compra VARCHAR, repuesto VARCHAR, cantidad INTEGER, precio_unidad NUMERIC)
+CREATE OR REPLACE FUNCTION SV_GERENTE.up_detalle_compra(gerente VARCHAR, compra VARCHAR, repuesto VARCHAR, cantidad INTEGER, precio_unidad NUMERIC)
 RETURNS VOID AS $$
 BEGIN
-    PERFORM SV_COMPRAS.up_detalle(up_dc.gerente, up_dc.compra, up_dc.repuesto, up_dc.cantidad, up_dc.precio_unidad);
+    PERFORM SV_COMPRAS.up_detalle(up_detalle_compra.gerente, up_detalle_compra.compra, up_detalle_compra.repuesto, up_detalle_compra.cantidad, up_detalle_compra.precio_unidad);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
-CREATE OR REPLACE FUNCTION SV_GERENTE.de_dc(gerente VARCHAR, compra VARCHAR, repuesto VARCHAR)
+CREATE OR REPLACE FUNCTION SV_GERENTE.de_detalle_compra(gerente VARCHAR, compra VARCHAR, repuesto VARCHAR)
 RETURNS VOID AS $$
 BEGIN
-    PERFORM SV_COMPRAS.de_detalle(de_dc.gerente, de_dc.compra, de_dc.repuesto);
+    PERFORM SV_COMPRAS.de_detalle(de_detalle_compra.gerente, de_detalle_compra.compra, de_detalle_compra.repuesto);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
-CREATE OR REPLACE FUNCTION SV_GERENTE.co_vtc(gerente VARCHAR, numero VARCHAR)
+CREATE OR REPLACE FUNCTION SV_GERENTE.co_valorTotalCompra(gerente VARCHAR, numero VARCHAR)
 RETURNS NUMERIC AS $$
 BEGIN
-    RETURN SV_COMPRAS.co_valorTotal(co_vtc.gerente, co_vtc.numero);
+    RETURN SV_COMPRAS.co_valorTotal(co_valorTotalCompra.gerente, co_valorTotalCompra.numero);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
-CREATE OR REPLACE FUNCTION SV_GERENTE.co_pa(gerente VARCHAR)
+CREATE OR REPLACE FUNCTION SV_GERENTE.co_repuestosPorAgotarseSede(gerente VARCHAR)
 RETURNS REFCURSOR AS $$
 BEGIN
-    RETURN SV_COMPRAS.co_porAgotarse(co_pa.gerente);
+    RETURN SV_COMPRAS.co_porAgotarse(co_repuestosPorAgotarseSede.gerente);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
@@ -2153,91 +2153,91 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE SCHEMA SV_TECNICO;
 
-CREATE OR REPLACE FUNCTION SV_TECNICO.ad_s(tecnico VARCHAR, vehiculo VARCHAR)
+CREATE OR REPLACE FUNCTION SV_TECNICO.ad_servicio(tecnico VARCHAR, vehiculo VARCHAR)
 RETURNS VARCHAR AS $$
 BEGIN
-    RETURN SV_SERVICIOS.ad(ad_s.tecnico, ad_s.vehiculo);
+    RETURN SV_SERVICIOS.ad(ad_servicio.tecnico, ad_servicio.vehiculo);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
-CREATE OR REPLACE FUNCTION SV_TECNICO.up_s(tecnico VARCHAR, numero VARCHAR, estado VARCHAR)
+CREATE OR REPLACE FUNCTION SV_TECNICO.up_servicio(tecnico VARCHAR, numero VARCHAR, estado VARCHAR)
 RETURNS VOID AS $$
 BEGIN
-    PERFORM SV_SERVICIOS.up(up_s.tecnico, up_s.numero, up_s.estado);
+    PERFORM SV_SERVICIOS.up(up_servicio.tecnico, up_servicio.numero, up_servicio.estado);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
-CREATE OR REPLACE FUNCTION SV_TECNICO.de_s(tecnico VARCHAR, numero VARCHAR)
+CREATE OR REPLACE FUNCTION SV_TECNICO.de_servicio(tecnico VARCHAR, numero VARCHAR)
 RETURNS VOID AS $$
 BEGIN
-    PERFORM SV_SERVICIOS.de(de_s.tecnico, de_s.numero);
+    PERFORM SV_SERVICIOS.de(de_servicio.tecnico, de_servicio.numero);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
-CREATE OR REPLACE FUNCTION SV_TECNICO.ad_d(tecnico VARCHAR, servicio VARCHAR, catalogo_servicio VARCHAR, tecnico_asignado VARCHAR)
+CREATE OR REPLACE FUNCTION SV_TECNICO.ad_detalle_servicio(tecnico VARCHAR, servicio VARCHAR, catalogo_servicio VARCHAR, tecnico_asignado VARCHAR)
 RETURNS INTEGER AS $$
 BEGIN
-    RETURN SV_SERVICIOS.ad_detalle(ad_d.tecnico, ad_d.servicio, ad_d.catalogo_servicio, ad_d.tecnico_asignado);
+    RETURN SV_SERVICIOS.ad_detalle(ad_detalle_servicio.tecnico, ad_detalle_servicio.servicio, ad_detalle_servicio.catalogo_servicio, ad_detalle_servicio.tecnico_asignado);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
-CREATE OR REPLACE FUNCTION SV_TECNICO.co_vt(tecnico VARCHAR, numero VARCHAR)
+CREATE OR REPLACE FUNCTION SV_TECNICO.co_valorTotalServicio(tecnico VARCHAR, numero VARCHAR)
 RETURNS NUMERIC AS $$
 BEGIN
-    RETURN SV_SERVICIOS.co_valorTotal(co_vt.tecnico, co_vt.numero);
+    RETURN SV_SERVICIOS.co_valorTotal(co_valorTotalServicio.tecnico, co_valorTotalServicio.numero);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
-CREATE OR REPLACE FUNCTION SV_TECNICO.co_ep(tecnico VARCHAR)
+CREATE OR REPLACE FUNCTION SV_TECNICO.co_serviciosEnProcesoSede(tecnico VARCHAR)
 RETURNS REFCURSOR AS $$
 BEGIN
-    RETURN SV_SERVICIOS.co_enProceso(co_ep.tecnico);
+    RETURN SV_SERVICIOS.co_enProceso(co_serviciosEnProcesoSede.tecnico);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
-CREATE OR REPLACE FUNCTION SV_TECNICO.co_es(placa VARCHAR)
+CREATE OR REPLACE FUNCTION SV_TECNICO.co_estadoServicioVehiculo(placa VARCHAR)
 RETURNS REFCURSOR AS $$
 BEGIN
-    RETURN SV_SERVICIOS.co_estado(co_es.placa);
+    RETURN SV_SERVICIOS.co_estado(co_estadoServicioVehiculo.placa);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
-CREATE OR REPLACE FUNCTION SV_TECNICO.up_t(tecnico VARCHAR, servicio VARCHAR, item INTEGER, estado VARCHAR, horas_trabajadas NUMERIC)
+CREATE OR REPLACE FUNCTION SV_TECNICO.up_detalle_servicio(tecnico VARCHAR, servicio VARCHAR, item INTEGER, estado VARCHAR, horas_trabajadas NUMERIC)
 RETURNS VOID AS $$
 BEGIN
-    PERFORM SV_SERVICIOS.up_detalle(up_t.tecnico, up_t.servicio, up_t.item, up_t.estado, up_t.horas_trabajadas);
+    PERFORM SV_SERVICIOS.up_detalle(up_detalle_servicio.tecnico, up_detalle_servicio.servicio, up_detalle_servicio.item, up_detalle_servicio.estado, up_detalle_servicio.horas_trabajadas);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
-CREATE OR REPLACE FUNCTION SV_TECNICO.up_dg(tecnico VARCHAR, servicio VARCHAR, item INTEGER, diagnostico JSONB)
+CREATE OR REPLACE FUNCTION SV_TECNICO.up_diagnostico_servicio(tecnico VARCHAR, servicio VARCHAR, item INTEGER, diagnostico JSONB)
 RETURNS VOID AS $$
 BEGIN
-    PERFORM SV_SERVICIOS.up_diagnostico(up_dg.tecnico, up_dg.servicio, up_dg.item, up_dg.diagnostico);
+    PERFORM SV_SERVICIOS.up_diagnostico(up_diagnostico_servicio.tecnico, up_diagnostico_servicio.servicio, up_diagnostico_servicio.item, up_diagnostico_servicio.diagnostico);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
 
-CREATE OR REPLACE FUNCTION SV_TECNICO.co_vtc(tecnico VARCHAR, numero VARCHAR)
+CREATE OR REPLACE FUNCTION SV_TECNICO.co_valorTotalCompra(tecnico VARCHAR, numero VARCHAR)
 RETURNS NUMERIC AS $$
 BEGIN
-    RETURN SV_COMPRAS.co_valorTotal(co_vtc.tecnico, co_vtc.numero);
+    RETURN SV_COMPRAS.co_valorTotal(co_valorTotalCompra.tecnico, co_valorTotalCompra.numero);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
-CREATE OR REPLACE FUNCTION SV_TECNICO.co_pa(tecnico VARCHAR)
+CREATE OR REPLACE FUNCTION SV_TECNICO.co_repuestosPorAgotarseSede(tecnico VARCHAR)
 RETURNS REFCURSOR AS $$
 BEGIN
-    RETURN SV_COMPRAS.co_porAgotarse(co_pa.tecnico);
+    RETURN SV_COMPRAS.co_porAgotarse(co_repuestosPorAgotarseSede.tecnico);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
@@ -2262,32 +2262,32 @@ REVOKE USAGE ON SCHEMA SV_GERENTE FROM mecadata_gerente;
 REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA SV_TECNICO FROM mecadata_tecnico;
 REVOKE USAGE ON SCHEMA SV_TECNICO FROM mecadata_tecnico;
 
-DROP FUNCTION IF EXISTS SV_GERENTE.ad_s(VARCHAR, VARCHAR);
-DROP FUNCTION IF EXISTS SV_GERENTE.up_s(VARCHAR, VARCHAR, VARCHAR);
-DROP FUNCTION IF EXISTS SV_GERENTE.de_s(VARCHAR, VARCHAR);
-DROP FUNCTION IF EXISTS SV_GERENTE.ad_d(VARCHAR, VARCHAR, VARCHAR, VARCHAR);
-DROP FUNCTION IF EXISTS SV_GERENTE.co_vt(VARCHAR, VARCHAR);
-DROP FUNCTION IF EXISTS SV_GERENTE.co_ep(VARCHAR);
-DROP FUNCTION IF EXISTS SV_GERENTE.co_es(VARCHAR);
-DROP FUNCTION IF EXISTS SV_TECNICO.ad_s(VARCHAR, VARCHAR);
-DROP FUNCTION IF EXISTS SV_TECNICO.up_s(VARCHAR, VARCHAR, VARCHAR);
-DROP FUNCTION IF EXISTS SV_TECNICO.de_s(VARCHAR, VARCHAR);
-DROP FUNCTION IF EXISTS SV_TECNICO.ad_d(VARCHAR, VARCHAR, VARCHAR, VARCHAR);
-DROP FUNCTION IF EXISTS SV_TECNICO.co_ep(VARCHAR);
-DROP FUNCTION IF EXISTS SV_TECNICO.co_es(VARCHAR);
-DROP FUNCTION IF EXISTS SV_TECNICO.co_vt(VARCHAR, VARCHAR);
-DROP FUNCTION IF EXISTS SV_TECNICO.up_t(VARCHAR, VARCHAR, INTEGER, VARCHAR, NUMERIC);
-DROP FUNCTION IF EXISTS SV_TECNICO.up_dg(VARCHAR, VARCHAR, INTEGER, JSONB);
-DROP FUNCTION IF EXISTS SV_GERENTE.ad_c(VARCHAR, VARCHAR);
-DROP FUNCTION IF EXISTS SV_GERENTE.up_c(VARCHAR, VARCHAR, VARCHAR);
-DROP FUNCTION IF EXISTS SV_GERENTE.de_c(VARCHAR, VARCHAR);
-DROP FUNCTION IF EXISTS SV_GERENTE.ad_dc(VARCHAR, VARCHAR, VARCHAR, INTEGER, NUMERIC);
-DROP FUNCTION IF EXISTS SV_GERENTE.up_dc(VARCHAR, VARCHAR, VARCHAR, INTEGER, NUMERIC);
-DROP FUNCTION IF EXISTS SV_GERENTE.de_dc(VARCHAR, VARCHAR, VARCHAR);
-DROP FUNCTION IF EXISTS SV_GERENTE.co_vtc(VARCHAR, VARCHAR);
-DROP FUNCTION IF EXISTS SV_GERENTE.co_pa(VARCHAR);
-DROP FUNCTION IF EXISTS SV_TECNICO.co_vtc(VARCHAR, VARCHAR);
-DROP FUNCTION IF EXISTS SV_TECNICO.co_pa(VARCHAR);
+DROP FUNCTION IF EXISTS SV_GERENTE.ad_servicio(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_GERENTE.up_servicio(VARCHAR, VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_GERENTE.de_servicio(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_GERENTE.ad_detalle_servicio(VARCHAR, VARCHAR, VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_GERENTE.co_valorTotalServicio(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_GERENTE.co_serviciosEnProcesoSede(VARCHAR);
+DROP FUNCTION IF EXISTS SV_GERENTE.co_estadoServicioVehiculo(VARCHAR);
+DROP FUNCTION IF EXISTS SV_TECNICO.ad_servicio(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_TECNICO.up_servicio(VARCHAR, VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_TECNICO.de_servicio(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_TECNICO.ad_detalle_servicio(VARCHAR, VARCHAR, VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_TECNICO.co_serviciosEnProcesoSede(VARCHAR);
+DROP FUNCTION IF EXISTS SV_TECNICO.co_estadoServicioVehiculo(VARCHAR);
+DROP FUNCTION IF EXISTS SV_TECNICO.co_valorTotalServicio(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_TECNICO.up_detalle_servicio(VARCHAR, VARCHAR, INTEGER, VARCHAR, NUMERIC);
+DROP FUNCTION IF EXISTS SV_TECNICO.up_diagnostico_servicio(VARCHAR, VARCHAR, INTEGER, JSONB);
+DROP FUNCTION IF EXISTS SV_GERENTE.ad_compra(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_GERENTE.up_compra(VARCHAR, VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_GERENTE.de_compra(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_GERENTE.ad_detalle_compra(VARCHAR, VARCHAR, VARCHAR, INTEGER, NUMERIC);
+DROP FUNCTION IF EXISTS SV_GERENTE.up_detalle_compra(VARCHAR, VARCHAR, VARCHAR, INTEGER, NUMERIC);
+DROP FUNCTION IF EXISTS SV_GERENTE.de_detalle_compra(VARCHAR, VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_GERENTE.co_valorTotalCompra(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_GERENTE.co_repuestosPorAgotarseSede(VARCHAR);
+DROP FUNCTION IF EXISTS SV_TECNICO.co_valorTotalCompra(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_TECNICO.co_repuestosPorAgotarseSede(VARCHAR);
 
 DROP SCHEMA IF EXISTS SV_GERENTE;
 DROP SCHEMA IF EXISTS SV_TECNICO;
@@ -2303,34 +2303,34 @@ DROP ROLE IF EXISTS mecadata_tecnico;
 
 -- Caso 1: La gerente de S01 consulta las ordenes en proceso de su sede: OS26-00000001
 BEGIN;
-SELECT SV_GERENTE.co_ep('3030303030');
+SELECT SV_GERENTE.co_serviciosEnProcesoSede('3030303030');
 FETCH ALL IN "co_enProceso";
 COMMIT;
 
 -- Caso 2: Agrega un cambio de aceite a la orden OS26-00000001. Queda como item 3
-SELECT SV_GERENTE.ad_d('3030303030', 'OS26-00000001', 'CS01', '2020202020');
+SELECT SV_GERENTE.ad_detalle_servicio('3030303030', 'OS26-00000001', 'CS01', '2020202020');
 
 -- Caso 3: Consulta el valor total de la orden: 405000 + 160000 = 565000
-SELECT SV_GERENTE.co_vt('3030303030', 'OS26-00000001');
+SELECT SV_GERENTE.co_valorTotalServicio('3030303030', 'OS26-00000001');
 
 -- Caso 4: La gerente de S02 abre una orden para el vehiculo DEF456. La sede se toma de la gerente
-SELECT SV_GERENTE.ad_s('8080808080', 'DEF456');
+SELECT SV_GERENTE.ad_servicio('8080808080', 'DEF456');
 
 
 -- Cuenta: Tecnico
 
 -- Caso 5: La tecnica 5050505050 registra 2 horas y finaliza su trabajo (item 2 de OS26-00000001)
-SELECT SV_TECNICO.up_t('5050505050', 'OS26-00000001', 2, 'F', 2);
+SELECT SV_TECNICO.up_detalle_servicio('5050505050', 'OS26-00000001', 2, 'F', 2);
 
 -- Caso 6: El tecnico 6060606060 recibe el vehiculo GHI789 y abre la orden. La sede se toma del tecnico (S02)
-SELECT SV_TECNICO.ad_s('6060606060', 'GHI789');
+SELECT SV_TECNICO.ad_servicio('6060606060', 'GHI789');
 
 
 -- Cuenta: Gerente
 
 -- Caso 7: Confirma el avance del vehiculo ABC123: items 1 y 2 en F, item 3 en E
 BEGIN;
-SELECT SV_GERENTE.co_es('ABC123');
+SELECT SV_GERENTE.co_estadoServicioVehiculo('ABC123');
 FETCH ALL IN "co_estado";
 COMMIT;
 
@@ -2339,29 +2339,29 @@ COMMIT;
 
 -- Caso 8: La gerente de S02 abre una compra al proveedor 900654321.
 -- La sede se toma de la gerente y se asigna el numero C000000006
-SELECT SV_GERENTE.ad_c('8080808080', '900654321');
+SELECT SV_GERENTE.ad_compra('8080808080', '900654321');
 
 -- Caso 9: Le agrega 8 pastillas de freno (R002) al precio de referencia (45000)
-SELECT SV_GERENTE.ad_dc('8080808080', 'C000000006', 'R002', 8, NULL);
+SELECT SV_GERENTE.ad_detalle_compra('8080808080', 'C000000006', 'R002', 8, NULL);
 
 -- Caso 10: Consulta el valor total de la compra: 8 x 45000 = 360000
-SELECT SV_GERENTE.co_vtc('8080808080', 'C000000006');
+SELECT SV_GERENTE.co_valorTotalCompra('8080808080', 'C000000006');
 
 -- Caso 11: La gerente de S01 sube a 30 las unidades de su compra C000000004
-SELECT SV_GERENTE.up_dc('3030303030', 'C000000004', 'R001', 30, NULL);
-SELECT SV_GERENTE.co_vtc('3030303030', 'C000000004');
+SELECT SV_GERENTE.up_detalle_compra('3030303030', 'C000000004', 'R001', 30, NULL);
+SELECT SV_GERENTE.co_valorTotalCompra('3030303030', 'C000000004');
 
 
 -- Cuenta: Tecnico
 
 -- Caso 12: El tecnico 6060606060 consulta los repuestos por agotarse en su sede (S02)
 BEGIN;
-SELECT SV_TECNICO.co_pa('6060606060');
+SELECT SV_TECNICO.co_repuestosPorAgotarseSede('6060606060');
 FETCH ALL IN "co_porAgotarse";
 COMMIT;
 
 -- Caso 13: Consulta el valor total de la compra C000000006 de su sede: 360000
-SELECT SV_TECNICO.co_vtc('6060606060', 'C000000006');
+SELECT SV_TECNICO.co_valorTotalCompra('6060606060', 'C000000006');
 
 
 
@@ -2370,7 +2370,7 @@ SELECT SV_TECNICO.co_vtc('6060606060', 'C000000006');
 -- Cuenta: Gerente
 
 -- Caso 1: No puede usar los servicios del tecnico
-SELECT SV_TECNICO.up_t('2020202020', 'OS26-00000001', 3, 'F', 1);
+SELECT SV_TECNICO.up_detalle_servicio('2020202020', 'OS26-00000001', 3, 'F', 1);
 
 -- Caso 2: No puede saltarse los servicios y leer la tabla directamente
 SELECT * FROM SERVICIOS;
@@ -2379,16 +2379,16 @@ SELECT * FROM SERVICIOS;
 SELECT SV_SERVICIOS.de('3030303030', 'OS26-00000001');
 
 -- Caso 4: La gerente de S02 no puede cancelar una orden de S01
-SELECT SV_GERENTE.up_s('8080808080', 'OS26-00000001', 'C');
+SELECT SV_GERENTE.up_servicio('8080808080', 'OS26-00000001', 'C');
 
 
 -- Cuenta: Tecnico
 
 -- Caso 5: No puede usar los servicios del gerente
-SELECT SV_GERENTE.ad_s('3030303030', 'ABC123');
+SELECT SV_GERENTE.ad_servicio('3030303030', 'ABC123');
 
 -- Caso 6: No puede registrar trabajo en un detalle asignado a otro tecnico
-SELECT SV_TECNICO.up_t('5050505050', 'OS26-00000001', 3, 'F', 1);
+SELECT SV_TECNICO.up_detalle_servicio('5050505050', 'OS26-00000001', 3, 'F', 1);
 
 -- Cuenta: Gerente
 
@@ -2399,22 +2399,19 @@ SELECT * FROM COMPRAS;
 SELECT SV_COMPRAS.de('3030303030', 'C000000004');
 
 -- Caso 9: La gerente de S02 no puede modificar una compra de S01
-SELECT SV_GERENTE.up_dc('8080808080', 'C000000004', 'R001', 1, NULL);
+SELECT SV_GERENTE.up_detalle_compra('8080808080', 'C000000004', 'R001', 1, NULL);
 
 -- Caso 10: La gerente de S02 no puede eliminar una compra de S01
-SELECT SV_GERENTE.de_c('8080808080', 'C000000004');
+SELECT SV_GERENTE.de_compra('8080808080', 'C000000004');
 
 
 -- Cuenta: Tecnico
 
 -- Caso 11: El tecnico no registra compras: no puede usar los servicios del gerente
-SELECT SV_GERENTE.ad_c('3030303030', '900123456');
+SELECT SV_GERENTE.ad_compra('3030303030', '900123456');
 
 -- Caso 12: No puede consultar compras de otra sede (6060606060 es de S02, C000000004 de S01)
-SELECT SV_TECNICO.co_vtc('6060606060', 'C000000004');
+SELECT SV_TECNICO.co_valorTotalCompra('6060606060', 'C000000004');
 
 
 */
-
-
-
