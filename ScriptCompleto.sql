@@ -1406,3 +1406,134 @@ SELECT SV_SERVICIOS.up_detalle('5050505050', 'OS26-00000001', 1, 'F', 1);
 
 
 
+
+--Actores
+CREATE SCHEMA SV_GERENTE;
+
+CREATE OR REPLACE FUNCTION SV_GERENTE.ad_s(gerente VARCHAR, vehiculo VARCHAR)
+RETURNS VARCHAR AS $$
+BEGIN
+    RETURN SV_SERVICIOS.ad(ad_s.gerente, ad_s.vehiculo);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+CREATE OR REPLACE FUNCTION SV_GERENTE.up_s(gerente VARCHAR, numero VARCHAR, estado VARCHAR)
+RETURNS VOID AS $$
+BEGIN
+    PERFORM SV_SERVICIOS.up(up_s.gerente, up_s.numero, up_s.estado);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+CREATE OR REPLACE FUNCTION SV_GERENTE.de_s(gerente VARCHAR, numero VARCHAR)
+RETURNS VOID AS $$
+BEGIN
+    PERFORM SV_SERVICIOS.de(de_s.gerente, de_s.numero);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+CREATE OR REPLACE FUNCTION SV_GERENTE.ad_d(gerente VARCHAR, servicio VARCHAR, catalogo_servicio VARCHAR, tecnico VARCHAR)
+RETURNS INTEGER AS $$
+BEGIN
+    RETURN SV_SERVICIOS.ad_detalle(ad_d.gerente, ad_d.servicio, ad_d.catalogo_servicio, ad_d.tecnico);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+CREATE OR REPLACE FUNCTION SV_GERENTE.co_vt(gerente VARCHAR, numero VARCHAR)
+RETURNS NUMERIC AS $$
+BEGIN
+    RETURN SV_SERVICIOS.co_valorTotal(co_vt.gerente, co_vt.numero);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+CREATE OR REPLACE FUNCTION SV_GERENTE.co_ep(gerente VARCHAR)
+RETURNS REFCURSOR AS $$
+BEGIN
+    RETURN SV_SERVICIOS.co_enProceso(co_ep.gerente);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+CREATE OR REPLACE FUNCTION SV_GERENTE.co_es(placa VARCHAR)
+RETURNS REFCURSOR AS $$
+BEGIN
+    RETURN SV_SERVICIOS.co_estado(co_es.placa);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+
+
+
+
+CREATE SCHEMA SV_TECNICO;
+
+CREATE OR REPLACE FUNCTION SV_TECNICO.ad_s(tecnico VARCHAR, vehiculo VARCHAR)
+RETURNS VARCHAR AS $$
+BEGIN
+    RETURN SV_SERVICIOS.ad(ad_s.tecnico, ad_s.vehiculo);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+CREATE OR REPLACE FUNCTION SV_TECNICO.up_s(tecnico VARCHAR, numero VARCHAR, estado VARCHAR)
+RETURNS VOID AS $$
+BEGIN
+    PERFORM SV_SERVICIOS.up(up_s.tecnico, up_s.numero, up_s.estado);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+CREATE OR REPLACE FUNCTION SV_TECNICO.de_s(tecnico VARCHAR, numero VARCHAR)
+RETURNS VOID AS $$
+BEGIN
+    PERFORM SV_SERVICIOS.de(de_s.tecnico, de_s.numero);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+CREATE OR REPLACE FUNCTION SV_TECNICO.ad_d(tecnico VARCHAR, servicio VARCHAR, catalogo_servicio VARCHAR, tecnico_asignado VARCHAR)
+RETURNS INTEGER AS $$
+BEGIN
+    RETURN SV_SERVICIOS.ad_detalle(ad_d.tecnico, ad_d.servicio, ad_d.catalogo_servicio, ad_d.tecnico_asignado);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+CREATE OR REPLACE FUNCTION SV_TECNICO.co_vt(tecnico VARCHAR, numero VARCHAR)
+RETURNS NUMERIC AS $$
+BEGIN
+    RETURN SV_SERVICIOS.co_valorTotal(co_vt.tecnico, co_vt.numero);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+CREATE OR REPLACE FUNCTION SV_TECNICO.co_ep(tecnico VARCHAR)
+RETURNS REFCURSOR AS $$
+BEGIN
+    RETURN SV_SERVICIOS.co_enProceso(co_ep.tecnico);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+CREATE OR REPLACE FUNCTION SV_TECNICO.co_es(placa VARCHAR)
+RETURNS REFCURSOR AS $$
+BEGIN
+    RETURN SV_SERVICIOS.co_estado(co_es.placa);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+CREATE OR REPLACE FUNCTION SV_TECNICO.up_t(tecnico VARCHAR, servicio VARCHAR, item INTEGER, estado VARCHAR, horas_trabajadas NUMERIC)
+RETURNS VOID AS $$
+BEGIN
+    PERFORM SV_SERVICIOS.up_detalle(up_t.tecnico, up_t.servicio, up_t.item, up_t.estado, up_t.horas_trabajadas);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+
