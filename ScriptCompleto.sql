@@ -82,7 +82,8 @@ CREATE TABLE DETALLE_ORDENES(
     catalogo_servicio VARCHAR(10) NOT NULL,
     servicio T_NUMERO_ORDEN NOT NULL,
     tecnico VARCHAR(15),
-    horas_trabajadas NUMERIC
+    horas_trabajadas NUMERIC,
+    diagnostico JSONB
 );
 
 CREATE TABLE GARANTIAS(
@@ -227,6 +228,21 @@ ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT CK_DETALLE_ORDENES_ITEM
 
 ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT CK_DETALLE_ORDENES_HORAS_TRABAJADAS
     CHECK (horas_trabajadas > 0);
+
+--Estructura del diagnostico: objeto con sintomas (arreglo no vacio), hallazgos (texto)
+--y, opcionalmente recomendaciones (arreglo)
+ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT CK_DETALLE_ORDENES_DIAGNOSTICO
+    CHECK (diagnostico IS NULL OR (
+        jsonb_typeof(diagnostico) = 'object'
+        AND diagnostico ? 'sintomas'
+        AND diagnostico ? 'hallazgos'
+        AND CASE WHEN jsonb_typeof(diagnostico -> 'sintomas') = 'array'
+                 THEN jsonb_array_length(diagnostico -> 'sintomas') > 0
+                 ELSE FALSE END
+        AND jsonb_typeof(diagnostico -> 'hallazgos') = 'string'
+        AND (NOT diagnostico ? 'recomendaciones'
+             OR jsonb_typeof(diagnostico -> 'recomendaciones') = 'array')
+    ));
 
 ALTER TABLE TRASLADOS ADD CONSTRAINT CK_TRASLADOS_CANTIDAD
     CHECK (cantidad > 0);
@@ -630,6 +646,17 @@ CREATE TRIGGER tg_2_SERVICIOS_bd
 -- DROP FUNCTION IF EXISTS fc_tg_1_SERVICIOS_au();
 -- DROP FUNCTION IF EXISTS fc_tg_2_SERVICIOS_bd();
 
+--Indices
+--CRUD de Servicios: las ordenes se buscan por sede y estado 
+CREATE INDEX IX_SERVICIOS_SEDE_ESTADO ON SERVICIOS(sede, estado);
+
+--CRUD de Compras: los detalles de compra se buscan por repuesto
+CREATE INDEX IX_DETALLE_COMPRAS_REPUESTO ON DETALLE_COMPRAS(repuesto);
+
+    --XIndices
+-- DROP INDEX IF EXISTS IX_SERVICIOS_SEDE_ESTADO;
+-- DROP INDEX IF EXISTS IX_DETALLE_COMPRAS_REPUESTO;
+
 --Vistas
 --Inventario: unidades disponibles de cada repuesto en cada sede.
 --se calcula como = cantidad = compras + traslados que llegan - traslados que salen - consumos
@@ -817,10 +844,12 @@ INSERT INTO SERVICIOS (numero, fecha_inicio, fecha_fin, estado, vehiculo, sede) 
 SELECT setval('SQ_SERVICIOS_numero',
                 (SELECT COALESCE(MAX(SPLIT_PART(numero, '-', 2)::INTEGER), 0) + 1 FROM SERVICIOS), false);
 
-INSERT INTO DETALLE_ORDENES (item, valor_cobrado, estado, fecha_inicio, fecha_fin, catalogo_servicio, servicio, tecnico, horas_trabajadas) VALUES
-    (1, 160000.00, 'E', '2026-11-03', NULL, 'CS01', 'OS26-00000001', '2020202020', 1.5),
-    (1, 220000.00, 'F', '2026-09-14', '2026-09-15', 'CS02', 'OS26-00000002', '2020202020', 2),
-    (1, 230000.00, 'F', '2026-10-05', '2026-10-06', 'CS02', 'OS26-00000003', '6060606060', 2.5);
+INSERT INTO DETALLE_ORDENES (item, valor_cobrado, estado, fecha_inicio, fecha_fin, catalogo_servicio, servicio, tecnico, horas_trabajadas, diagnostico) VALUES
+    (1, 160000.00, 'E', '2026-11-03', NULL, 'CS01', 'OS26-00000001', '2020202020', 1.5, NULL),
+    (1, 220000.00, 'F', '2026-09-14', '2026-09-15', 'CS02', 'OS26-00000002', '2020202020', 2,
+        '{"sintomas": ["ruido al frenar", "pedal esponjoso"], "hallazgos": "Pastillas delanteras al 10% de vida util", "recomendaciones": ["cambiar discos en 5000 km"]}'),
+    (1, 230000.00, 'F', '2026-10-05', '2026-10-06', 'CS02', 'OS26-00000003', '6060606060', 2.5,
+        '{"sintomas": ["vibracion al frenar"], "hallazgos": "Pastillas cristalizadas"}');
 
 INSERT INTO CONSUMOS (cantidad, fecha_uso, precio, repuesto, servicio, item) VALUES
     (1, '2026-11-03', 25000.00, 'R001', 'OS26-00000001', 1),
@@ -906,6 +935,10 @@ INSERT INTO DETALLE_ORDENES (item, valor_cobrado, estado, fecha_inicio, fecha_fi
 -- Nulidad: toda garantia debe tener fecha de fin
 INSERT INTO GARANTIAS (numero, fecha_inicio, fecha_fin, condiciones, estado, servicio, item) VALUES
     ('G04', '2026-06-01', NULL, 'Sin fecha de fin', 'V', 'OS26-00000001', 1);
+
+-- Estructura JSON: el diagnostico debe traer los sintomas
+INSERT INTO DETALLE_ORDENES (item, valor_cobrado, estado, fecha_inicio, fecha_fin, catalogo_servicio, servicio, tecnico, horas_trabajadas, diagnostico) VALUES
+    (2, 150000.00, 'E', '2026-11-03', NULL, 'CS01', 'OS26-00000001', NULL, NULL, '{"hallazgos": "Fuga en el carter"}');
 */
 
 --XPoblar
