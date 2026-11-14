@@ -461,7 +461,7 @@ ALTER TABLE TRASLADOS ADD CONSTRAINT CK_TRASLADOS_SEDES
     CHECK (sede_sale <> sede_llega);
 
 ALTER TABLE SERVICIOS ADD CONSTRAINT CK_SERVICIOS_ESTADO_FECHA_FIN
-    CHECK (estado <> 'F' OR fecha_fin IS NOT NULL);
+    CHECK (estado = 'E' OR fecha_fin IS NOT NULL);
 
 ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT CK_DETALLE_ORDENES_ESTADO_FECHA_FIN
     CHECK (estado <> 'F' OR fecha_fin IS NOT NULL);
@@ -544,7 +544,8 @@ CREATE TRIGGER tg_1_SERVICIOS_bi
 
 
     --Modificar
---Los datos de los servicios finalizados o cancelados no se pueden modificar y la fecha de inicio no puede quedar en el futuro.
+--De un servicio solo se modifica el estado, y solo mientras esta en proceso: se finaliza o se cancela.
+--El numero, la fecha de inicio, el vehiculo y la sede no cambian; la fecha de fin se asigna al finalizar o cancelar.
 CREATE OR REPLACE FUNCTION fc_tg_1_SERVICIOS_bu() RETURNS TRIGGER AS
 $$
 BEGIN
@@ -556,37 +557,26 @@ BEGIN
         RAISE EXCEPTION 'No se pueden modificar los servicios cancelados';
     END IF;
 
-    IF NEW.fecha_inicio > CURRENT_DATE THEN
-        RAISE EXCEPTION 'La fecha de inicio del servicio no puede ser futura';
+    IF NEW.numero IS DISTINCT FROM OLD.numero
+        OR NEW.fecha_inicio IS DISTINCT FROM OLD.fecha_inicio
+        OR NEW.fecha_fin IS DISTINCT FROM OLD.fecha_fin
+        OR NEW.vehiculo IS DISTINCT FROM OLD.vehiculo
+        OR NEW.sede IS DISTINCT FROM OLD.sede THEN
+        RAISE EXCEPTION 'De un servicio solo se puede modificar el estado';
+    END IF;
+
+    IF NEW.estado IN ('F', 'C') THEN
+        NEW.fecha_fin := CURRENT_DATE;
     END IF;
 
     RETURN NEW;
-
 END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER tg_1_SERVICIOS_bu
-    BEFORE UPDATE ON SERVICIOS 
+    BEFORE UPDATE ON SERVICIOS
     FOR EACH ROW
     EXECUTE FUNCTION fc_tg_1_SERVICIOS_bu();
-
-
---Actualizar el valor de fecha final cuando el servicio se declara finalizado
-CREATE OR REPLACE FUNCTION fc_tg_2_SERVICIOS_bu() RETURNS TRIGGER AS
-$$
-BEGIN
-    IF NEW.estado = 'F' AND OLD.estado <> 'F' THEN 
-        NEW.fecha_fin := CAST(NOW() AS DATE);
-    END IF;
-
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER tg_2_SERVICIOS_bu 
-    BEFORE UPDATE ON SERVICIOS 
-    FOR EACH ROW
-    EXECUTE FUNCTION fc_tg_2_SERVICIOS_bu();
 
 
 --Al cancelar un servicio, sus detalles de orden en proceso tambien quedan cancelados.
@@ -632,13 +622,11 @@ CREATE TRIGGER tg_2_SERVICIOS_bd
 
 -- DROP TRIGGER IF EXISTS tg_1_SERVICIOS_bi ON SERVICIOS;
 -- DROP TRIGGER IF EXISTS tg_1_SERVICIOS_bu ON SERVICIOS;
--- DROP TRIGGER IF EXISTS tg_2_SERVICIOS_bu ON SERVICIOS;
 -- DROP TRIGGER IF EXISTS tg_1_SERVICIOS_au ON SERVICIOS;
 -- DROP TRIGGER IF EXISTS tg_2_SERVICIOS_bd ON SERVICIOS;
 
 -- DROP FUNCTION IF EXISTS fc_tg_1_SERVICIOS_bi();
 -- DROP FUNCTION IF EXISTS fc_tg_1_SERVICIOS_bu();
--- DROP FUNCTION IF EXISTS fc_tg_2_SERVICIOS_bu();
 -- DROP FUNCTION IF EXISTS fc_tg_1_SERVICIOS_au();
 -- DROP FUNCTION IF EXISTS fc_tg_2_SERVICIOS_bd();
 
@@ -649,19 +637,19 @@ CREATE VIEW INVENTARIO AS
 SELECT  m.sede,
         m.repuesto,
         SUM(m.cantidad) AS cantidad
-FROM (
+FROM ( -- Devuelve una tabla con la estrcutura -> sede / repuesto / cantidad (- o + dependiendo)
     SELECT c.sede, dc.repuesto, dc.cantidad
-    FROM DETALLE_COMPRAS dc
+    FROM DETALLE_COMPRAS dc                     -- La cantidad que se compra de un repuesto
     JOIN COMPRAS c ON c.numero = dc.compra
     UNION ALL
     SELECT t.sede_llega, t.repuesto, t.cantidad
-    FROM TRASLADOS t
+    FROM TRASLADOS t                            -- Cuando el traslado es hacia la sede
     UNION ALL
     SELECT t.sede_sale, t.repuesto, -t.cantidad
-    FROM TRASLADOS t
+    FROM TRASLADOS t                            -- Cuando el traslado sale de la
     UNION ALL
     SELECT s.sede, co.repuesto, -co.cantidad
-    FROM CONSUMOS co
+    FROM CONSUMOS co                            -- La cantidad de respuestos usados en reparaciones 
     JOIN SERVICIOS s ON s.numero = co.servicio
 ) m
 GROUP BY m.sede, m.repuesto;
@@ -680,22 +668,23 @@ FROM (
     SELECT  se.numero AS sede,
             se.nombre,
             me.mes,
-            COALESCE((SELECT SUM(m.valor)
+            COALESCE((SELECT SUM(m.valor)   -- suma de todos los cobros de servicios
                         FROM COBROS c
                         JOIN MOVIMIENTOS m ON m.numero = c.movimiento
                         JOIN SERVICIOS s ON s.numero = c.orden
                         WHERE s.sede = se.numero AND m.estado = 'P'
                         AND TO_CHAR(m.fecha, 'YYYY-MM') = me.mes), 0) AS totalCobrado,
-            COALESCE((SELECT SUM(m.valor)
+            COALESCE((SELECT SUM(m.valor)   -- suma de todos los pagos hechos a proveedores (resta)
                         FROM PAGOS pg
                         JOIN MOVIMIENTOS m ON m.numero = pg.movimiento
                         JOIN COMPRAS co ON co.numero = pg.compra
                         WHERE co.sede = se.numero AND m.estado = 'P'
                         AND TO_CHAR(m.fecha, 'YYYY-MM') = me.mes), 0) AS totalCompras,
-            COALESCE((SELECT SUM(e.salario)
+            COALESCE((SELECT SUM(e.salario) -- la suma de los salarios de todos lo empleados ese mes
                         FROM EMPLEADOS e
                         WHERE e.sede = se.numero), 0) AS totalSalarios
     FROM SEDES se
+    -- arma la tabla de combinaciones sede × mes
     CROSS JOIN (SELECT DISTINCT TO_CHAR(m.fecha, 'YYYY-MM') AS mes
                 FROM MOVIMIENTOS m
                 WHERE m.estado = 'P') me
@@ -709,7 +698,7 @@ SELECT  p.cedula,
         e.sede,
         TO_CHAR(d.fecha_fin, 'YYYY-MM') AS mes,
         COUNT(*) AS trabajosFinalizados,
-        SUM(d.valor_cobrado) AS valorGenerado,
+        SUM(d.valor_cobrado) AS valorGenerado,          -- este número no refleja la utilidad
         SUM(d.horas_trabajadas) AS horasTrabajadas,
         SUM(cs.tiempo_medio) AS horasEstimadas,
         SUM(d.horas_trabajadas) - SUM(cs.tiempo_medio) AS diferencia
@@ -744,9 +733,9 @@ SELECT  i.sede,
         i.cantidad AS cantidadDisponible,
         COALESCE(u.cantidadUsada, 0) AS cantidadUsada,
         COALESCE(ROUND(u.cantidadUsada / u.meses, 2), 0) AS consumoMensualPromedio
-FROM INVENTARIO i
+FROM INVENTARIO i       -- inventario trae los respuesto disponibles 
 JOIN REPUESTOS r ON r.serie = i.repuesto
-LEFT JOIN (
+LEFT JOIN (             -- este left join trae los consumos
     SELECT  s.sede,
             co.repuesto,
             SUM(co.cantidad) AS cantidadUsada,
@@ -823,7 +812,7 @@ INSERT INTO SERVICIOS (numero, fecha_inicio, fecha_fin, estado, vehiculo, sede) 
     ('OS26-00000001', '2026-11-03', NULL, 'E', 'ABC123', 'S01'),
     ('OS26-00000002', '2026-09-14', '2026-09-15', 'F', 'DEF456', 'S01'),
     ('OS26-00000003', '2026-10-05', '2026-10-06', 'F', 'GHI789', 'S02'),
-    ('OS26-00000004', '2026-10-20', NULL, 'C', 'GHI789', 'S02');
+    ('OS26-00000004', '2026-10-20', '2026-10-21', 'C', 'GHI789', 'S02');
 
 SELECT setval('SQ_SERVICIOS_numero',
                 (SELECT COALESCE(MAX(SPLIT_PART(numero, '-', 2)::INTEGER), 0) + 1 FROM SERVICIOS), false);
@@ -1074,7 +1063,7 @@ WHERE e.cargo = 'G'
     AND e.sede <> (SELECT g.sede FROM EMPLEADOS g WHERE g.persona = '3030303030' AND g.cargo = 'G')
 ORDER BY s.nombre ASC;
 
-    -- Consultar estado de un ser
+    -- Consultar estado de un servicio
 SELECT  s.numero AS numeroOrden,
         s.sede AS sede,
         det.fecha_inicio AS fechaInicio,
@@ -1113,62 +1102,46 @@ ORDER BY g.fecha_inicio DESC;
 --Componentes
 CREATE SCHEMA SV_SERVICIOS;
 
-CREATE OR REPLACE FUNCTION SV_SERVICIOS.ad(gerente VARCHAR, vehiculo VARCHAR)
+CREATE OR REPLACE FUNCTION SV_SERVICIOS.ad(empleado VARCHAR, vehiculo VARCHAR)
 RETURNS VARCHAR AS $$
 DECLARE
-    sede_gerente VARCHAR;
+    sede_empleado VARCHAR;
     new_servicio VARCHAR;
 BEGIN
-    SELECT e.sede INTO sede_gerente
+    SELECT e.sede INTO sede_empleado
     FROM EMPLEADOS e
-    WHERE e.persona = ad.gerente AND e.cargo = 'G';
+    WHERE e.persona = ad.empleado;
 
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'El empleado no es gerente de ninguna sede';
+        RAISE EXCEPTION 'La persona no es empleado de ninguna sede';
     END IF;
 
     INSERT INTO SERVICIOS(vehiculo, sede)
-    VALUES(ad.vehiculo, sede_gerente)
+    VALUES(ad.vehiculo, sede_empleado)
     RETURNING numero INTO new_servicio;
     RETURN new_servicio;
 END;
 $$ LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE FUNCTION SV_SERVICIOS.up(gerente VARCHAR, numero VARCHAR, estado VARCHAR, vehiculo VARCHAR)
+CREATE OR REPLACE FUNCTION SV_SERVICIOS.up(empleado VARCHAR, numero VARCHAR, estado VARCHAR)
 RETURNS VOID AS $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM SERVICIOS s
                     JOIN EMPLEADOS e ON e.sede = s.sede
                     WHERE s.numero = up.numero
-                        AND e.persona = up.gerente AND e.cargo = 'G') THEN
-        RAISE EXCEPTION 'El servicio no existe o no pertenece a la sede del gerente';
+                        AND e.persona = up.empleado) THEN
+        RAISE EXCEPTION 'El servicio no existe o no pertenece a la sede del empleado';
     END IF;
 
     UPDATE SERVICIOS s
-    SET estado = COALESCE(up.estado, s.estado),
-        vehiculo = COALESCE(up.vehiculo, s.vehiculo)
+    SET estado = up.estado
     WHERE s.numero = up.numero;
 END;
 $$ LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE FUNCTION SV_SERVICIOS.de(gerente VARCHAR, numero VARCHAR)
-RETURNS VOID AS $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM SERVICIOS s
-                    JOIN EMPLEADOS e ON e.sede = s.sede
-                    WHERE s.numero = de.numero
-                        AND e.persona = de.gerente AND e.cargo = 'G') THEN
-        RAISE EXCEPTION 'El servicio no existe o no pertenece a la sede del gerente';
-    END IF;
-
-    DELETE FROM SERVICIOS s WHERE s.numero = de.numero;
-END;
-$$ LANGUAGE plpgsql;
-
-
-CREATE OR REPLACE FUNCTION SV_SERVICIOS.ad_detalle(gerente VARCHAR, servicio VARCHAR, catalogo_servicio VARCHAR, tecnico VARCHAR)
+CREATE OR REPLACE FUNCTION SV_SERVICIOS.ad_detalle(empleado VARCHAR, servicio VARCHAR, catalogo_servicio VARCHAR, tecnico VARCHAR)
 RETURNS INTEGER AS $$
 DECLARE
     estado_servicio VARCHAR;
@@ -1180,10 +1153,10 @@ BEGIN
     FROM SERVICIOS s
     JOIN EMPLEADOS e ON e.sede = s.sede
     WHERE s.numero = ad_detalle.servicio
-        AND e.persona = ad_detalle.gerente AND e.cargo = 'G';
+        AND e.persona = ad_detalle.empleado;
 
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'El servicio no existe o no pertenece a la sede del gerente';
+        RAISE EXCEPTION 'El servicio no existe o no pertenece a la sede del empleado';
     END IF;
 
     IF estado_servicio <> 'E' THEN
@@ -1230,10 +1203,19 @@ END;
 $$ LANGUAGE plpgsql;
 
 
+--Los servicios no se eliminan: un servicio que no continua se cancela.
+CREATE OR REPLACE FUNCTION SV_SERVICIOS.de(empleado VARCHAR, numero VARCHAR)
+RETURNS VOID AS $$
+BEGIN
+    RAISE EXCEPTION 'No se permite eliminar los servicios; un servicio que no continua se cancela';
+END;
+$$ LANGUAGE plpgsql;
+
+
 /* Valor total de un servicio (atributo derivado /valorTotal):
 la suma de los valores cobrados en sus detalles mas la suma de (cantidad x precio)
 de los repuestos consumidos en ellos. No se cuentan los detalles cancelados. */
-CREATE OR REPLACE FUNCTION SV_SERVICIOS.co_valorTotal(gerente VARCHAR, numero VARCHAR)
+CREATE OR REPLACE FUNCTION SV_SERVICIOS.co_valorTotal(empleado VARCHAR, numero VARCHAR)
 RETURNS NUMERIC AS $$
 DECLARE
     total_detalles NUMERIC;
@@ -1242,8 +1224,8 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM SERVICIOS s
                     JOIN EMPLEADOS e ON e.sede = s.sede
                     WHERE s.numero = co_valorTotal.numero
-                        AND e.persona = co_valorTotal.gerente AND e.cargo = 'G') THEN
-        RAISE EXCEPTION 'El servicio no existe o no pertenece a la sede del gerente';
+                        AND e.persona = co_valorTotal.empleado) THEN
+        RAISE EXCEPTION 'El servicio no existe o no pertenece a la sede del empleado';
     END IF;
 
     SELECT COALESCE(SUM(d.valor_cobrado), 0) INTO total_detalles
@@ -1266,10 +1248,10 @@ PARA PODER mantener un control oportuno de los trabajos que estan siendo realiza
 -
 Detalle
 C: Numero de orden, placa, nombre y apellido del cliente y fecha de inicio.
-F: Ordenes en estado E de la sede del gerente que consulta.
+F: Ordenes en estado E de la sede del empleado que consulta.
 O: De la mas antigua a la mas reciente.
  */
-CREATE OR REPLACE FUNCTION SV_SERVICIOS.co_enProceso(gerente VARCHAR)
+CREATE OR REPLACE FUNCTION SV_SERVICIOS.co_enProceso(empleado VARCHAR)
 RETURNS REFCURSOR AS $$
 DECLARE
     cur REFCURSOR := 'co_enProceso';
@@ -1284,7 +1266,7 @@ BEGIN
         JOIN VEHICULOS v ON v.placa = s.vehiculo
         JOIN PERSONAS p ON p.cedula = v.cliente
         JOIN EMPLEADOS e ON e.sede = s.sede
-        WHERE s.estado = 'E' AND e.cargo = 'G' AND e.persona = co_enProceso.gerente
+        WHERE s.estado = 'E' AND e.persona = co_enProceso.empleado
         ORDER BY s.fecha_inicio ASC;
     RETURN cur;
 END;
@@ -1324,9 +1306,9 @@ $$ LANGUAGE plpgsql;
 --XComponentes
 /*
 DROP FUNCTION IF EXISTS SV_SERVICIOS.ad(VARCHAR, VARCHAR);
-DROP FUNCTION IF EXISTS SV_SERVICIOS.up(VARCHAR, VARCHAR, VARCHAR, VARCHAR);
-DROP FUNCTION IF EXISTS SV_SERVICIOS.de(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_SERVICIOS.up(VARCHAR, VARCHAR, VARCHAR);
 DROP FUNCTION IF EXISTS SV_SERVICIOS.ad_detalle(VARCHAR, VARCHAR, VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_SERVICIOS.de(VARCHAR, VARCHAR);
 DROP FUNCTION IF EXISTS SV_SERVICIOS.up_detalle(VARCHAR, VARCHAR, INTEGER, VARCHAR, NUMERIC);
 DROP FUNCTION IF EXISTS SV_SERVICIOS.co_valorTotal(VARCHAR, VARCHAR);
 DROP FUNCTION IF EXISTS SV_SERVICIOS.co_enProceso(VARCHAR);
@@ -1365,7 +1347,7 @@ FETCH ALL IN "co_estado";
 COMMIT;
 
 -- Caso 7: Se cancela el servicio abierto en el caso 1. Su detalle en proceso queda cancelado
-SELECT SV_SERVICIOS.up('8080808080', (SELECT MAX(numero) FROM SERVICIOS), 'C', NULL);
+SELECT SV_SERVICIOS.up('8080808080', (SELECT MAX(numero) FROM SERVICIOS), 'C');
 SELECT servicio, item, estado FROM DETALLE_ORDENES WHERE servicio = (SELECT MAX(numero) FROM SERVICIOS);
 
 -- Caso 8: Ordenes en proceso de la sede de la gerente 3030303030 (S01): OS26-00000001
@@ -1383,10 +1365,10 @@ SELECT SV_SERVICIOS.ad('3030303030', 'ZZZ999');
 
 -- Caso 2: Un servicio finalizado (OS26-00000002) no se puede modificar
 -- tg_1_SERVICIOS_bu lanza 'No se pueden modificar los servicios finalizados'
-SELECT SV_SERVICIOS.up('3030303030', 'OS26-00000002', 'C', NULL);
+SELECT SV_SERVICIOS.up('3030303030', 'OS26-00000002', 'C');
 
 -- Caso 3: Los servicios no se pueden eliminar, ni siquiera los cancelados (OS26-00000004)
--- tg_2_SERVICIOS_bd lanza 'No se permite eliminar los servicios; un servicio que no continua se cancela'
+-- de lanza 'No se permite eliminar los servicios; un servicio que no continua se cancela'
 SELECT SV_SERVICIOS.de('8080808080', 'OS26-00000004');
 
 -- Caso 4: La sede S01 no tiene habilitado el servicio CS03
@@ -1409,17 +1391,18 @@ SELECT SV_SERVICIOS.up_detalle('5050505050', 'OS26-00000001', 9, 'F', 2);
 -- FK_DETALLE_ORDENES_TECNICO rechaza el insert
 SELECT SV_SERVICIOS.ad_detalle('3030303030', 'OS26-00000001', 'CS01', '3030303030');
 
--- Caso 9: Un tecnico (2020202020) no puede abrir servicios
--- ad lanza 'El empleado no es gerente de ninguna sede'
-SELECT SV_SERVICIOS.ad('2020202020', 'ABC123');
+-- Caso 9: Ana (1010101010) es cliente, no empleada: no puede abrir servicios
+-- ad lanza 'La persona no es empleado de ninguna sede'
+SELECT SV_SERVICIOS.ad('1010101010', 'ABC123');
 
 -- Caso 10: La gerente de S02 no puede agregar detalles a una orden de S01 (OS26-00000001)
--- ad_detalle lanza 'El servicio no existe o no pertenece a la sede del gerente'
+-- ad_detalle lanza 'El servicio no existe o no pertenece a la sede del empleado'
 SELECT SV_SERVICIOS.ad_detalle('8080808080', 'OS26-00000001', 'CS01', NULL);
 
 -- Caso 11: El item 1 de OS26-00000001 es de 2020202020; otro tecnico no lo puede modificar
 -- up_detalle lanza 'El detalle no existe o no esta asignado al tecnico'
 SELECT SV_SERVICIOS.up_detalle('5050505050', 'OS26-00000001', 1, 'F', 1);
 */
+
 
 
