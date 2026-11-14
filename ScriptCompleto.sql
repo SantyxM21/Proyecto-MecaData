@@ -1570,3 +1570,112 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
 
+
+--Seguridad
+-- Las funciones de rol no funcionan el la DB de la Universidad
+CREATE ROLE mecadata_gerente;
+CREATE ROLE mecadata_tecnico;
+
+GRANT USAGE ON SCHEMA SV_GERENTE TO mecadata_gerente;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA SV_GERENTE TO mecadata_gerente;
+
+GRANT USAGE ON SCHEMA SV_TECNICO TO mecadata_tecnico;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA SV_TECNICO TO mecadata_tecnico;
+
+
+--XSeguridad
+/*
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA SV_GERENTE FROM mecadata_gerente;
+REVOKE USAGE ON SCHEMA SV_GERENTE FROM mecadata_gerente;
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA SV_TECNICO FROM mecadata_tecnico;
+REVOKE USAGE ON SCHEMA SV_TECNICO FROM mecadata_tecnico;
+
+DROP FUNCTION IF EXISTS SV_GERENTE.ad_s(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_GERENTE.up_s(VARCHAR, VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_GERENTE.de_s(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_GERENTE.ad_d(VARCHAR, VARCHAR, VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_GERENTE.co_vt(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_GERENTE.co_ep(VARCHAR);
+DROP FUNCTION IF EXISTS SV_GERENTE.co_es(VARCHAR);
+DROP FUNCTION IF EXISTS SV_TECNICO.ad_s(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_TECNICO.up_s(VARCHAR, VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_TECNICO.de_s(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_TECNICO.ad_d(VARCHAR, VARCHAR, VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_TECNICO.co_ep(VARCHAR);
+DROP FUNCTION IF EXISTS SV_TECNICO.co_es(VARCHAR);
+DROP FUNCTION IF EXISTS SV_TECNICO.co_vt(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_TECNICO.up_t(VARCHAR, VARCHAR, INTEGER, VARCHAR, NUMERIC);
+
+DROP SCHEMA IF EXISTS SV_GERENTE;
+DROP SCHEMA IF EXISTS SV_TECNICO;
+
+DROP ROLE IF EXISTS mecadata_gerente;
+DROP ROLE IF EXISTS mecadata_tecnico;
+*/
+
+
+--SeguridadOK
+
+-- Cuenta: Gerente
+
+-- Caso 1: La gerente de S01 consulta las ordenes en proceso de su sede: OS26-00000001
+BEGIN;
+SELECT SV_GERENTE.co_ep('3030303030');
+FETCH ALL IN "co_enProceso";
+COMMIT;
+
+-- Caso 2: Agrega un cambio de aceite a la orden OS26-00000001. Queda como item 3
+SELECT SV_GERENTE.ad_d('3030303030', 'OS26-00000001', 'CS01', '2020202020');
+
+-- Caso 3: Consulta el valor total de la orden: 405000 + 160000 = 565000
+SELECT SV_GERENTE.co_vt('3030303030', 'OS26-00000001');
+
+-- Caso 4: La gerente de S02 abre una orden para el vehiculo DEF456. La sede se toma de la gerente
+SELECT SV_GERENTE.ad_s('8080808080', 'DEF456');
+
+
+-- Cuenta: Tecnico
+
+-- Caso 5: La tecnica 5050505050 registra 2 horas y finaliza su trabajo (item 2 de OS26-00000001)
+SELECT SV_TECNICO.up_t('5050505050', 'OS26-00000001', 2, 'F', 2);
+
+-- Caso 6: El tecnico 6060606060 recibe el vehiculo GHI789 y abre la orden. La sede se toma del tecnico (S02)
+SELECT SV_TECNICO.ad_s('6060606060', 'GHI789');
+
+
+-- Cuenta: Gerente
+
+-- Caso 7: Confirma el avance del vehiculo ABC123: items 1 y 2 en F, item 3 en E
+BEGIN;
+SELECT SV_GERENTE.co_es('ABC123');
+FETCH ALL IN "co_estado";
+COMMIT;
+
+
+
+--SeguridadNoOK
+/*
+-- Cuenta: Gerente
+
+-- Caso 1: No puede usar los servicios del tecnico
+SELECT SV_TECNICO.up_t('2020202020', 'OS26-00000001', 3, 'F', 1);
+
+-- Caso 2: No puede saltarse los servicios y leer la tabla directamente
+SELECT * FROM SERVICIOS;
+
+-- Caso 3: No puede usar el componente directamente
+SELECT SV_SERVICIOS.de('3030303030', 'OS26-00000001');
+
+-- Caso 4: La gerente de S02 no puede cancelar una orden de S01
+SELECT SV_GERENTE.up_s('8080808080', 'OS26-00000001', 'C');
+
+
+-- Cuenta: Tecnico
+
+-- Caso 5: No puede usar los servicios del gerente
+SELECT SV_GERENTE.ad_s('3030303030', 'ABC123');
+
+-- Caso 6: No puede registrar trabajo en un detalle asignado a otro tecnico
+SELECT SV_TECNICO.up_t('5050505050', 'OS26-00000001', 3, 'F', 1);
+
+*/
