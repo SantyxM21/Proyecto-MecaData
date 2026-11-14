@@ -1111,50 +1111,64 @@ ORDER BY g.fecha_inicio DESC;
 
 
 --Componentes
-CREATE SCHEMA PC_SERVICIOS;
+CREATE SCHEMA SV_SERVICIOS;
 
-CREATE OR REPLACE FUNCTION PC_SERVICIOS.ad(vehiculo VARCHAR, sede VARCHAR)
+CREATE OR REPLACE FUNCTION SV_SERVICIOS.ad(gerente VARCHAR, vehiculo VARCHAR)
 RETURNS VARCHAR AS $$
 DECLARE
+    sede_gerente VARCHAR;
     new_servicio VARCHAR;
 BEGIN
+    SELECT e.sede INTO sede_gerente
+    FROM EMPLEADOS e
+    WHERE e.persona = ad.gerente AND e.cargo = 'G';
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'El empleado no es gerente de ninguna sede';
+    END IF;
+
     INSERT INTO SERVICIOS(vehiculo, sede)
-    VALUES(ad.vehiculo, ad.sede)
+    VALUES(ad.vehiculo, sede_gerente)
     RETURNING numero INTO new_servicio;
     RETURN new_servicio;
 END;
 $$ LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE FUNCTION PC_SERVICIOS.up(numero VARCHAR, estado VARCHAR, vehiculo VARCHAR, sede VARCHAR)
+CREATE OR REPLACE FUNCTION SV_SERVICIOS.up(gerente VARCHAR, numero VARCHAR, estado VARCHAR, vehiculo VARCHAR)
 RETURNS VOID AS $$
 BEGIN
+    IF NOT EXISTS (SELECT 1 FROM SERVICIOS s
+                    JOIN EMPLEADOS e ON e.sede = s.sede
+                    WHERE s.numero = up.numero
+                        AND e.persona = up.gerente AND e.cargo = 'G') THEN
+        RAISE EXCEPTION 'El servicio no existe o no pertenece a la sede del gerente';
+    END IF;
+
     UPDATE SERVICIOS s
     SET estado = COALESCE(up.estado, s.estado),
-        vehiculo = COALESCE(up.vehiculo, s.vehiculo),
-        sede = COALESCE(up.sede, s.sede)
+        vehiculo = COALESCE(up.vehiculo, s.vehiculo)
     WHERE s.numero = up.numero;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'El servicio no existe';
-    END IF;
 END;
 $$ LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE FUNCTION PC_SERVICIOS.de(numero VARCHAR)
+CREATE OR REPLACE FUNCTION SV_SERVICIOS.de(gerente VARCHAR, numero VARCHAR)
 RETURNS VOID AS $$
 BEGIN
-    DELETE FROM SERVICIOS s WHERE s.numero = de.numero;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'El servicio no existe';
+    IF NOT EXISTS (SELECT 1 FROM SERVICIOS s
+                    JOIN EMPLEADOS e ON e.sede = s.sede
+                    WHERE s.numero = de.numero
+                        AND e.persona = de.gerente AND e.cargo = 'G') THEN
+        RAISE EXCEPTION 'El servicio no existe o no pertenece a la sede del gerente';
     END IF;
+
+    DELETE FROM SERVICIOS s WHERE s.numero = de.numero;
 END;
 $$ LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE FUNCTION PC_SERVICIOS.ad_detalle(servicio VARCHAR, catalogo_servicio VARCHAR, tecnico VARCHAR)
+CREATE OR REPLACE FUNCTION SV_SERVICIOS.ad_detalle(gerente VARCHAR, servicio VARCHAR, catalogo_servicio VARCHAR, tecnico VARCHAR)
 RETURNS INTEGER AS $$
 DECLARE
     estado_servicio VARCHAR;
@@ -1164,10 +1178,12 @@ DECLARE
 BEGIN
     SELECT s.estado, s.sede INTO estado_servicio, sede_servicio
     FROM SERVICIOS s
-    WHERE s.numero = ad_detalle.servicio;
+    JOIN EMPLEADOS e ON e.sede = s.sede
+    WHERE s.numero = ad_detalle.servicio
+        AND e.persona = ad_detalle.gerente AND e.cargo = 'G';
 
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'El servicio no existe';
+        RAISE EXCEPTION 'El servicio no existe o no pertenece a la sede del gerente';
     END IF;
 
     IF estado_servicio <> 'E' THEN
@@ -1196,29 +1212,40 @@ END;
 $$ LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE FUNCTION PC_SERVICIOS.up_detalle(servicio VARCHAR, item INTEGER, estado VARCHAR, tecnico VARCHAR, horas_trabajadas NUMERIC)
+CREATE OR REPLACE FUNCTION SV_SERVICIOS.up_detalle(tecnico VARCHAR, servicio VARCHAR, item INTEGER, estado VARCHAR, horas_trabajadas NUMERIC)
 RETURNS VOID AS $$
 BEGIN
     UPDATE DETALLE_ORDENES d
     SET estado = COALESCE(up_detalle.estado, d.estado),
-        tecnico = COALESCE(up_detalle.tecnico, d.tecnico),
         horas_trabajadas = COALESCE(up_detalle.horas_trabajadas, d.horas_trabajadas),
         fecha_fin = CASE WHEN up_detalle.estado = 'F' THEN CURRENT_DATE ELSE d.fecha_fin END
-    WHERE d.servicio = up_detalle.servicio AND d.item = up_detalle.item;
+    WHERE d.servicio = up_detalle.servicio
+        AND d.item = up_detalle.item
+        AND d.tecnico = up_detalle.tecnico;
 
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'El detalle no pertenece al servicio';
+        RAISE EXCEPTION 'El detalle no existe o no esta asignado al tecnico';
     END IF;
 END;
 $$ LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE FUNCTION PC_SERVICIOS.co_valorTotal(numero VARCHAR)
+/* Valor total de un servicio (atributo derivado /valorTotal):
+la suma de los valores cobrados en sus detalles mas la suma de (cantidad x precio)
+de los repuestos consumidos en ellos. No se cuentan los detalles cancelados. */
+CREATE OR REPLACE FUNCTION SV_SERVICIOS.co_valorTotal(gerente VARCHAR, numero VARCHAR)
 RETURNS NUMERIC AS $$
 DECLARE
     total_detalles NUMERIC;
     total_repuestos NUMERIC;
 BEGIN
+    IF NOT EXISTS (SELECT 1 FROM SERVICIOS s
+                    JOIN EMPLEADOS e ON e.sede = s.sede
+                    WHERE s.numero = co_valorTotal.numero
+                        AND e.persona = co_valorTotal.gerente AND e.cargo = 'G') THEN
+        RAISE EXCEPTION 'El servicio no existe o no pertenece a la sede del gerente';
+    END IF;
+
     SELECT COALESCE(SUM(d.valor_cobrado), 0) INTO total_detalles
     FROM DETALLE_ORDENES d
     WHERE d.servicio = co_valorTotal.numero AND d.estado <> 'C';
@@ -1242,7 +1269,7 @@ C: Numero de orden, placa, nombre y apellido del cliente y fecha de inicio.
 F: Ordenes en estado E de la sede del gerente que consulta.
 O: De la mas antigua a la mas reciente.
  */
-CREATE OR REPLACE FUNCTION PC_SERVICIOS.co_enProceso(gerente VARCHAR)
+CREATE OR REPLACE FUNCTION SV_SERVICIOS.co_enProceso(gerente VARCHAR)
 RETURNS REFCURSOR AS $$
 DECLARE
     cur REFCURSOR := 'co_enProceso';
@@ -1273,7 +1300,7 @@ C: Numero de orden, sede, fecha de inicio, servicio del catalogo y estado de cad
 F: Placa del vehiculo y ordenes en estado E.
 O: Por fecha de inicio.
  */
-CREATE OR REPLACE FUNCTION PC_SERVICIOS.co_estado(placa VARCHAR)
+CREATE OR REPLACE FUNCTION SV_SERVICIOS.co_estado(placa VARCHAR)
 RETURNS REFCURSOR AS $$
 DECLARE
     cur REFCURSOR := 'co_estado';
@@ -1296,54 +1323,54 @@ $$ LANGUAGE plpgsql;
 
 --XComponentes
 /*
-DROP FUNCTION IF EXISTS PC_SERVICIOS.ad(VARCHAR, VARCHAR);
-DROP FUNCTION IF EXISTS PC_SERVICIOS.up(VARCHAR, VARCHAR, VARCHAR, VARCHAR);
-DROP FUNCTION IF EXISTS PC_SERVICIOS.de(VARCHAR);
-DROP FUNCTION IF EXISTS PC_SERVICIOS.ad_detalle(VARCHAR, VARCHAR, VARCHAR);
-DROP FUNCTION IF EXISTS PC_SERVICIOS.up_detalle(VARCHAR, INTEGER, VARCHAR, VARCHAR, NUMERIC);
-DROP FUNCTION IF EXISTS PC_SERVICIOS.co_valorTotal(VARCHAR);
-DROP FUNCTION IF EXISTS PC_SERVICIOS.co_enProceso(VARCHAR);
-DROP FUNCTION IF EXISTS PC_SERVICIOS.co_estado(VARCHAR);
-DROP SCHEMA IF EXISTS PC_SERVICIOS;
+DROP FUNCTION IF EXISTS SV_SERVICIOS.ad(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_SERVICIOS.up(VARCHAR, VARCHAR, VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_SERVICIOS.de(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_SERVICIOS.ad_detalle(VARCHAR, VARCHAR, VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_SERVICIOS.up_detalle(VARCHAR, VARCHAR, INTEGER, VARCHAR, NUMERIC);
+DROP FUNCTION IF EXISTS SV_SERVICIOS.co_valorTotal(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS SV_SERVICIOS.co_enProceso(VARCHAR);
+DROP FUNCTION IF EXISTS SV_SERVICIOS.co_estado(VARCHAR);
+DROP SCHEMA IF EXISTS SV_SERVICIOS;
 */
 
 
 --ComponentesOK
 
--- Caso 1: Se abre un servicio para el vehiculo GHI789 en la sede S02.
--- Se asigna el numero consecutivo, la fecha de hoy y el estado E
-SELECT PC_SERVICIOS.ad('GHI789', 'S02');
+-- Caso 1: La gerente de S02 (8080808080) abre un servicio para el vehiculo GHI789.
+-- Queda en la sede de la gerente, con el numero consecutivo, la fecha de hoy y el estado E
+SELECT SV_SERVICIOS.ad('8080808080', 'GHI789');
 SELECT * FROM SERVICIOS WHERE numero = (SELECT MAX(numero) FROM SERVICIOS);
 
 -- Caso 2: Se le agrega un cambio de aceite a ese servicio.
 -- Queda como item 1, en estado E y con el precio local de S02 (155000)
-SELECT PC_SERVICIOS.ad_detalle((SELECT MAX(numero) FROM SERVICIOS), 'CS01', '6060606060');
+SELECT SV_SERVICIOS.ad_detalle('8080808080', (SELECT MAX(numero) FROM SERVICIOS), 'CS01', '6060606060');
 
 -- Caso 3: A la orden OS26-00000001 (S01) se le agrega una revision de frenos.
 -- Queda como item 2 y con el precio base (220000) porque S01 no tiene precio local
-SELECT PC_SERVICIOS.ad_detalle('OS26-00000001', 'CS02', '5050505050');
+SELECT SV_SERVICIOS.ad_detalle('3030303030', 'OS26-00000001', 'CS02', '5050505050');
 
--- Caso 4: Se finaliza el item 1 de la orden OS26-00000001. Queda en F y con fecha de fin de hoy
-SELECT PC_SERVICIOS.up_detalle('OS26-00000001', 1, 'F', NULL, NULL);
+-- Caso 4: El tecnico 2020202020 finaliza el item 1 de la orden OS26-00000001. Queda en F y con fecha de fin de hoy
+SELECT SV_SERVICIOS.up_detalle('2020202020', 'OS26-00000001', 1, 'F', NULL);
 SELECT item, estado, fecha_fin, valor_cobrado, tecnico, horas_trabajadas
 FROM DETALLE_ORDENES WHERE servicio = 'OS26-00000001' ORDER BY item;
 
 -- Caso 5: Valor total de la orden OS26-00000001: 160000 + 220000 + (1 x 25000) = 405000
-SELECT PC_SERVICIOS.co_valorTotal('OS26-00000001');
+SELECT SV_SERVICIOS.co_valorTotal('3030303030', 'OS26-00000001');
 
 -- Caso 6: Estado del servicio del vehiculo ABC123: item 1 en F e item 2 en E
 BEGIN;
-SELECT PC_SERVICIOS.co_estado('ABC123');
+SELECT SV_SERVICIOS.co_estado('ABC123');
 FETCH ALL IN "co_estado";
 COMMIT;
 
 -- Caso 7: Se cancela el servicio abierto en el caso 1. Su detalle en proceso queda cancelado
-SELECT PC_SERVICIOS.up((SELECT MAX(numero) FROM SERVICIOS), 'C', NULL, NULL);
+SELECT SV_SERVICIOS.up('8080808080', (SELECT MAX(numero) FROM SERVICIOS), 'C', NULL);
 SELECT servicio, item, estado FROM DETALLE_ORDENES WHERE servicio = (SELECT MAX(numero) FROM SERVICIOS);
 
 -- Caso 8: Ordenes en proceso de la sede de la gerente 3030303030 (S01): OS26-00000001
 BEGIN;
-SELECT PC_SERVICIOS.co_enProceso('3030303030');
+SELECT SV_SERVICIOS.co_enProceso('3030303030');
 FETCH ALL IN "co_enProceso";
 COMMIT;
 
@@ -1352,36 +1379,47 @@ COMMIT;
 /*
 -- Caso 1: El vehiculo ZZZ999 no esta registrado
 -- FK_SERVICIOS_VEHICULO rechaza el insert
-SELECT PC_SERVICIOS.ad('ZZZ999', 'S01');
+SELECT SV_SERVICIOS.ad('3030303030', 'ZZZ999');
 
 -- Caso 2: Un servicio finalizado (OS26-00000002) no se puede modificar
 -- tg_1_SERVICIOS_bu lanza 'No se pueden modificar los servicios finalizados'
-SELECT PC_SERVICIOS.up('OS26-00000002', 'C', NULL, NULL);
+SELECT SV_SERVICIOS.up('3030303030', 'OS26-00000002', 'C', NULL);
 
 -- Caso 3: Los servicios no se pueden eliminar, ni siquiera los cancelados (OS26-00000004)
 -- tg_2_SERVICIOS_bd lanza 'No se permite eliminar los servicios; un servicio que no continua se cancela'
-SELECT PC_SERVICIOS.de('OS26-00000004');
+SELECT SV_SERVICIOS.de('8080808080', 'OS26-00000004');
 
 -- Caso 4: La sede S01 no tiene habilitado el servicio CS03
 -- ad_detalle lanza 'La sede no tiene habilitado ese servicio del catalogo'
-SELECT PC_SERVICIOS.ad_detalle('OS26-00000001', 'CS03', NULL);
+SELECT SV_SERVICIOS.ad_detalle('3030303030', 'OS26-00000001', 'CS03', NULL);
 
 -- Caso 5: No se agregan detalles a un servicio finalizado (OS26-00000002)
 -- ad_detalle lanza 'Solo se pueden agregar detalles a los servicios en proceso'
-SELECT PC_SERVICIOS.ad_detalle('OS26-00000002', 'CS01', NULL);
+SELECT SV_SERVICIOS.ad_detalle('3030303030', 'OS26-00000002', 'CS01', NULL);
 
 -- Caso 6: El item 2 de OS26-00000001 no tiene horas trabajadas, no se puede finalizar
 -- CK_DETALLE_ORDENES_ESTADO_TECNICO rechaza el update
-SELECT PC_SERVICIOS.up_detalle('OS26-00000001', 2, 'F', NULL, NULL);
+SELECT SV_SERVICIOS.up_detalle('5050505050', 'OS26-00000001', 2, 'F', NULL);
 
 -- Caso 7: El item 9 no existe en la orden OS26-00000001
--- up_detalle lanza 'El detalle no pertenece al servicio'
-SELECT PC_SERVICIOS.up_detalle('OS26-00000001', 9, 'F', NULL, 2);
+-- up_detalle lanza 'El detalle no existe o no esta asignado al tecnico'
+SELECT SV_SERVICIOS.up_detalle('5050505050', 'OS26-00000001', 9, 'F', 2);
 
 -- Caso 8: Quien ejecuta el detalle debe ser un tecnico (3030303030 es gerente)
 -- FK_DETALLE_ORDENES_TECNICO rechaza el insert
-SELECT PC_SERVICIOS.ad_detalle('OS26-00000001', 'CS01', '3030303030');
-*/
+SELECT SV_SERVICIOS.ad_detalle('3030303030', 'OS26-00000001', 'CS01', '3030303030');
 
+-- Caso 9: Un tecnico (2020202020) no puede abrir servicios
+-- ad lanza 'El empleado no es gerente de ninguna sede'
+SELECT SV_SERVICIOS.ad('2020202020', 'ABC123');
+
+-- Caso 10: La gerente de S02 no puede agregar detalles a una orden de S01 (OS26-00000001)
+-- ad_detalle lanza 'El servicio no existe o no pertenece a la sede del gerente'
+SELECT SV_SERVICIOS.ad_detalle('8080808080', 'OS26-00000001', 'CS01', NULL);
+
+-- Caso 11: El item 1 de OS26-00000001 es de 2020202020; otro tecnico no lo puede modificar
+-- up_detalle lanza 'El detalle no existe o no esta asignado al tecnico'
+SELECT SV_SERVICIOS.up_detalle('5050505050', 'OS26-00000001', 1, 'F', 1);
+*/
 
 
