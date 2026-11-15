@@ -1,4 +1,4 @@
--- Active: 1794333671248@@granate.is.escuelaing.edu.co@5432@db1000107428
+-- Active: 1792113215779@@127.0.0.1@5432@prueba
 --Dominios
 CREATE DOMAIN T_PLACA AS VARCHAR(6)
     CHECK (VALUE ~ '^[A-Z]{3}[0-9]{3}$');
@@ -237,11 +237,11 @@ ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT CK_DETALLE_ORDENES_DIAGNOSTICO
         AND diagnostico ? 'sintomas'
         AND diagnostico ? 'hallazgos'
         AND CASE WHEN jsonb_typeof(diagnostico -> 'sintomas') = 'array'
-                 THEN jsonb_array_length(diagnostico -> 'sintomas') > 0
-                 ELSE FALSE END
+                THEN jsonb_array_length(diagnostico -> 'sintomas') > 0
+                ELSE FALSE END
         AND jsonb_typeof(diagnostico -> 'hallazgos') = 'string'
         AND (NOT diagnostico ? 'recomendaciones'
-             OR jsonb_typeof(diagnostico -> 'recomendaciones') = 'array')
+            OR jsonb_typeof(diagnostico -> 'recomendaciones') = 'array')
     ));
 
 ALTER TABLE TRASLADOS ADD CONSTRAINT CK_TRASLADOS_CANTIDAD
@@ -574,7 +574,7 @@ BEGIN
         RAISE EXCEPTION 'No se pueden modificar los servicios cancelados';
     END IF;
 
-    IF NEW.numero IS DISTINCT FROM OLD.numero
+    IF NEW.numero IS DISTINCT FROM OLD.numero -- Verifica que solo el estado es el que cambie
         OR NEW.fecha_inicio IS DISTINCT FROM OLD.fecha_inicio
         OR NEW.vehiculo IS DISTINCT FROM OLD.vehiculo
         OR NEW.sede IS DISTINCT FROM OLD.sede
@@ -582,7 +582,7 @@ BEGIN
         RAISE EXCEPTION 'De un servicio solo se puede modificar el estado';
     END IF;
 
-    IF NEW.estado = 'F'
+    IF NEW.estado = 'F' -- Si hay detalles en proceso no permite pasar a Finalizado
         AND EXISTS (SELECT 1 FROM DETALLE_ORDENES d WHERE d.servicio = NEW.numero AND d.estado = 'E') THEN
         RAISE EXCEPTION 'No se puede finalizar un servicio con detalles en proceso';
     END IF;
@@ -626,11 +626,11 @@ CREATE TRIGGER tg_1_SERVICIOS_au
 
 
     --Eliminar
---No se permite eliminar los servicios de la base de datos: un servicio que no continua se cancela.
+--No se permite eliminar los servicios de la base de datos
 CREATE OR REPLACE FUNCTION fc_tg_2_SERVICIOS_bd() RETURNS TRIGGER AS
 $$
 BEGIN
-    RAISE EXCEPTION 'No se permite eliminar los servicios; un servicio que no continua se cancela';
+    RAISE EXCEPTION 'No se permite eliminar los servicios';
 END;
 $$ LANGUAGE plpgsql;
 
@@ -641,53 +641,65 @@ CREATE TRIGGER tg_2_SERVICIOS_bd
 
 
     --DETALLE_ORDENES
---Los detalles solo se agregan, modifican o eliminan mientras el servicio esta en proceso
---(salvo cuando se cancela el servicio y sus detalles en proceso pasan a cancelados).
---Solo se agregan servicios del catalogo que la sede tiene habilitados.
---Del detalle no cambian el servicio, el item, el servicio del catalogo ni el valor cobrado.
+--Solo se agregan detalles a servicios en proceso y de servicios del catalogo que la sede tiene habilitados.
 --El tecnico del detalle debe trabajar en la sede del servicio.
-CREATE OR REPLACE FUNCTION fc_tg_1_DETALLE_ORDENES_biud() RETURNS TRIGGER AS
+CREATE OR REPLACE FUNCTION fc_tg_1_DETALLE_ORDENES_bi() RETURNS TRIGGER AS
 $$
 DECLARE
     estado_servicio VARCHAR;
     sede_servicio VARCHAR;
 BEGIN
-    IF TG_OP = 'DELETE' THEN
-        SELECT s.estado INTO estado_servicio FROM SERVICIOS s WHERE s.numero = OLD.servicio;
-        IF estado_servicio <> 'E' THEN
-            RAISE EXCEPTION 'Solo se pueden modificar los detalles de los servicios en proceso';
-        END IF;
-        RETURN OLD;
-    END IF;
-
     SELECT s.estado, s.sede INTO estado_servicio, sede_servicio FROM SERVICIOS s WHERE s.numero = NEW.servicio;
 
-    IF TG_OP = 'INSERT' THEN
-        IF estado_servicio <> 'E' THEN
-            RAISE EXCEPTION 'Solo se pueden agregar detalles a los servicios en proceso';
-        END IF;
-
-        IF NOT EXISTS (SELECT 1 FROM OFERTAS_SERVICIOS o
-                        WHERE o.sede = sede_servicio
-                            AND o.catalogo_servicio = NEW.catalogo_servicio
-                            AND o.habilitado = TRUE) THEN
-            RAISE EXCEPTION 'La sede no tiene habilitado ese servicio del catalogo';
-        END IF;
-    ELSE
-        IF NEW.servicio IS DISTINCT FROM OLD.servicio
-            OR NEW.item IS DISTINCT FROM OLD.item
-            OR NEW.catalogo_servicio IS DISTINCT FROM OLD.catalogo_servicio
-            OR NEW.valor_cobrado IS DISTINCT FROM OLD.valor_cobrado THEN
-            RAISE EXCEPTION 'Del detalle no se puede cambiar el servicio, el item, el servicio del catalogo ni el valor cobrado';
-        END IF;
-
-        IF estado_servicio <> 'E'
-            AND NOT (estado_servicio = 'C' AND OLD.estado = 'E' AND NEW.estado = 'C') THEN
-            RAISE EXCEPTION 'Solo se pueden modificar los detalles de los servicios en proceso';
-        END IF;
+    IF estado_servicio <> 'E' THEN
+        RAISE EXCEPTION 'Solo se pueden agregar detalles a los servicios en proceso';
     END IF;
 
-    IF (TG_OP = 'INSERT' OR NEW.tecnico IS DISTINCT FROM OLD.tecnico)
+    IF NOT EXISTS (SELECT 1 FROM OFERTAS_SERVICIOS o
+                    WHERE o.sede = sede_servicio
+                        AND o.catalogo_servicio = NEW.catalogo_servicio
+                        AND o.habilitado = TRUE) THEN
+        RAISE EXCEPTION 'La sede no tiene habilitado ese servicio del catalogo';
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM EMPLEADOS e WHERE e.persona = NEW.tecnico AND e.sede <> sede_servicio) THEN
+        RAISE EXCEPTION 'El tecnico no trabaja en la sede del servicio';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_1_DETALLE_ORDENES_bi
+    BEFORE INSERT ON DETALLE_ORDENES
+    FOR EACH ROW
+    EXECUTE FUNCTION fc_tg_1_DETALLE_ORDENES_bi();
+
+
+--Los detalles solo se modifican mientras el servicio esta en proceso 
+--Del detalle no cambian el servicio, el item, el servicio del catalogo ni el valor cobrado.
+--El tecnico del detalle debe trabajar en la sede del servicio.
+CREATE OR REPLACE FUNCTION fc_tg_1_DETALLE_ORDENES_bu() RETURNS TRIGGER AS
+$$
+DECLARE
+    estado_servicio VARCHAR;
+    sede_servicio VARCHAR;
+BEGIN
+    SELECT s.estado, s.sede INTO estado_servicio, sede_servicio FROM SERVICIOS s WHERE s.numero = NEW.servicio;
+
+    IF NEW.servicio IS DISTINCT FROM OLD.servicio
+        OR NEW.item IS DISTINCT FROM OLD.item
+        OR NEW.catalogo_servicio IS DISTINCT FROM OLD.catalogo_servicio
+        OR NEW.valor_cobrado IS DISTINCT FROM OLD.valor_cobrado THEN
+        RAISE EXCEPTION 'Del detalle no se puede cambiar el servicio, el item, el servicio del catalogo ni el valor cobrado';
+    END IF;
+
+    IF estado_servicio <> 'E'
+        AND NOT (estado_servicio = 'C' AND OLD.estado = 'E' AND NEW.estado = 'C') THEN
+        RAISE EXCEPTION 'Solo se pueden modificar los detalles de los servicios en proceso';
+    END IF;
+
+    IF NEW.tecnico IS DISTINCT FROM OLD.tecnico
         AND EXISTS (SELECT 1 FROM EMPLEADOS e WHERE e.persona = NEW.tecnico AND e.sede <> sede_servicio) THEN
         RAISE EXCEPTION 'El tecnico no trabaja en la sede del servicio';
     END IF;
@@ -696,10 +708,24 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER tg_1_DETALLE_ORDENES_biud
-    BEFORE INSERT OR UPDATE OR DELETE ON DETALLE_ORDENES
+CREATE TRIGGER tg_1_DETALLE_ORDENES_bu
+    BEFORE UPDATE ON DETALLE_ORDENES
     FOR EACH ROW
-    EXECUTE FUNCTION fc_tg_1_DETALLE_ORDENES_biud();
+    EXECUTE FUNCTION fc_tg_1_DETALLE_ORDENES_bu();
+
+
+--Los detalles no se eliminan
+CREATE OR REPLACE FUNCTION fc_tg_1_DETALLE_ORDENES_bd() RETURNS TRIGGER AS
+$$
+BEGIN
+    RAISE EXCEPTION 'No se permite eliminar los detalles';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_1_DETALLE_ORDENES_bd
+    BEFORE DELETE ON DETALLE_ORDENES
+    FOR EACH ROW
+    EXECUTE FUNCTION fc_tg_1_DETALLE_ORDENES_bd();
 
 
 --El valor cobrado es el precio local de la sede si no tiene, el precio base del catalogo.
@@ -783,32 +809,58 @@ CREATE TRIGGER tg_1_COMPRAS_bu
 
 
     --DETALLE_COMPRAS
---Los detalles de una compra que ya tiene pago no se agregan, no se modifican y no se eliminan.
-CREATE OR REPLACE FUNCTION fc_tg_1_DETALLE_COMPRAS_biud() RETURNS TRIGGER AS
+--No se agregan detalles a una compra que ya tiene pago.
+CREATE OR REPLACE FUNCTION fc_tg_1_DETALLE_COMPRAS_bi() RETURNS TRIGGER AS
 $$
 BEGIN
-    IF TG_OP IN ('UPDATE', 'DELETE')
-        AND EXISTS (SELECT 1 FROM PAGOS pg WHERE pg.compra = OLD.compra) THEN
+    IF EXISTS (SELECT 1 FROM PAGOS pg WHERE pg.compra = NEW.compra) THEN
         RAISE EXCEPTION 'La compra ya tiene pago y no se puede modificar';
-    END IF;
-
-    IF TG_OP IN ('INSERT', 'UPDATE')
-        AND EXISTS (SELECT 1 FROM PAGOS pg WHERE pg.compra = NEW.compra) THEN
-        RAISE EXCEPTION 'La compra ya tiene pago y no se puede modificar';
-    END IF;
-
-    IF TG_OP = 'DELETE' THEN
-        RETURN OLD;
     END IF;
 
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER tg_1_DETALLE_COMPRAS_biud
-    BEFORE INSERT OR UPDATE OR DELETE ON DETALLE_COMPRAS
+CREATE TRIGGER tg_1_DETALLE_COMPRAS_bi
+    BEFORE INSERT ON DETALLE_COMPRAS
     FOR EACH ROW
-    EXECUTE FUNCTION fc_tg_1_DETALLE_COMPRAS_biud();
+    EXECUTE FUNCTION fc_tg_1_DETALLE_COMPRAS_bi();
+
+
+--No se modifican los detalles de una compra que ya tiene pago
+CREATE OR REPLACE FUNCTION fc_tg_1_DETALLE_COMPRAS_bu() RETURNS TRIGGER AS
+$$
+BEGIN
+    IF EXISTS (SELECT 1 FROM PAGOS pg WHERE pg.compra = OLD.compra OR pg.compra = NEW.compra) THEN
+        RAISE EXCEPTION 'La compra ya tiene pago y no se puede modificar';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_1_DETALLE_COMPRAS_bu
+    BEFORE UPDATE ON DETALLE_COMPRAS
+    FOR EACH ROW
+    EXECUTE FUNCTION fc_tg_1_DETALLE_COMPRAS_bu();
+
+
+--No se eliminan los detalles de una compra que ya tiene pago.
+CREATE OR REPLACE FUNCTION fc_tg_1_DETALLE_COMPRAS_bd() RETURNS TRIGGER AS
+$$
+BEGIN
+    IF EXISTS (SELECT 1 FROM PAGOS pg WHERE pg.compra = OLD.compra) THEN
+        RAISE EXCEPTION 'La compra ya tiene pago y no se puede modificar';
+    END IF;
+
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_1_DETALLE_COMPRAS_bd
+    BEFORE DELETE ON DETALLE_COMPRAS
+    FOR EACH ROW
+    EXECUTE FUNCTION fc_tg_1_DETALLE_COMPRAS_bd();
 
 
 --Si no se indica el precio por unidad se toma el precio de referencia del proveedor de la compra
@@ -838,18 +890,31 @@ CREATE TRIGGER tg_2_DETALLE_COMPRAS_bi
 
 
     --PAGOS
---Los pagos de las compras no se modifican ni se eliminan: son el registro de lo que ya se le pago al proveedor.
-CREATE OR REPLACE FUNCTION fc_tg_1_PAGOS_bud() RETURNS TRIGGER AS
+--Los pagos de las compras no se modifican ni se eliminan
+CREATE OR REPLACE FUNCTION fc_tg_1_PAGOS_bu() RETURNS TRIGGER AS
 $$
 BEGIN
     RAISE EXCEPTION 'Los pagos no se pueden modificar ni eliminar';
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER tg_1_PAGOS_bud
-    BEFORE UPDATE OR DELETE ON PAGOS
+CREATE TRIGGER tg_1_PAGOS_bu
+    BEFORE UPDATE ON PAGOS
     FOR EACH ROW
-    EXECUTE FUNCTION fc_tg_1_PAGOS_bud();
+    EXECUTE FUNCTION fc_tg_1_PAGOS_bu();
+
+
+CREATE OR REPLACE FUNCTION fc_tg_1_PAGOS_bd() RETURNS TRIGGER AS
+$$
+BEGIN
+    RAISE EXCEPTION 'Los pagos no se pueden modificar ni eliminar';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_1_PAGOS_bd
+    BEFORE DELETE ON PAGOS
+    FOR EACH ROW
+    EXECUTE FUNCTION fc_tg_1_PAGOS_bd();
 
 
     --MOVIMIENTOS
@@ -871,7 +936,7 @@ CREATE TRIGGER tg_2_PAGOS_bi
     EXECUTE FUNCTION fc_tg_2_PAGOS_bi();
 
 
-CREATE OR REPLACE FUNCTION fc_tg_1_COBROS_biu() RETURNS TRIGGER AS
+CREATE OR REPLACE FUNCTION fc_tg_1_COBROS_bi() RETURNS TRIGGER AS
 $$
 BEGIN
     IF EXISTS (SELECT 1 FROM PAGOS pg WHERE pg.movimiento = NEW.movimiento) THEN
@@ -882,10 +947,27 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER tg_1_COBROS_biu
-    BEFORE INSERT OR UPDATE OF movimiento ON COBROS
+CREATE TRIGGER tg_1_COBROS_bi
+    BEFORE INSERT ON COBROS
     FOR EACH ROW
-    EXECUTE FUNCTION fc_tg_1_COBROS_biu();
+    EXECUTE FUNCTION fc_tg_1_COBROS_bi();
+
+
+CREATE OR REPLACE FUNCTION fc_tg_1_COBROS_bu() RETURNS TRIGGER AS
+$$
+BEGIN
+    IF EXISTS (SELECT 1 FROM PAGOS pg WHERE pg.movimiento = NEW.movimiento) THEN
+        RAISE EXCEPTION 'El movimiento ya esta registrado como pago, no puede ser tambien un cobro';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_1_COBROS_bu
+    BEFORE UPDATE OF movimiento ON COBROS
+    FOR EACH ROW
+    EXECUTE FUNCTION fc_tg_1_COBROS_bu();
 
     --XDisparadores
 -- ALTER TABLE SERVICIOS ALTER COLUMN fecha_inicio DROP DEFAULT;
@@ -904,23 +986,35 @@ CREATE TRIGGER tg_1_COBROS_biu
 -- DROP FUNCTION IF EXISTS fc_tg_2_SERVICIOS_bd();
 
 -- DROP TRIGGER IF EXISTS tg_2_DETALLE_ORDENES_bi ON DETALLE_ORDENES;
--- DROP TRIGGER IF EXISTS tg_1_DETALLE_ORDENES_biud ON DETALLE_ORDENES;
+-- DROP TRIGGER IF EXISTS tg_1_DETALLE_ORDENES_bd ON DETALLE_ORDENES;
+-- DROP TRIGGER IF EXISTS tg_1_DETALLE_ORDENES_bu ON DETALLE_ORDENES;
+-- DROP TRIGGER IF EXISTS tg_1_DETALLE_ORDENES_bi ON DETALLE_ORDENES;
 -- DROP FUNCTION IF EXISTS fc_tg_2_DETALLE_ORDENES_bi();
--- DROP FUNCTION IF EXISTS fc_tg_1_DETALLE_ORDENES_biud();
+-- DROP FUNCTION IF EXISTS fc_tg_1_DETALLE_ORDENES_bd();
+-- DROP FUNCTION IF EXISTS fc_tg_1_DETALLE_ORDENES_bu();
+-- DROP FUNCTION IF EXISTS fc_tg_1_DETALLE_ORDENES_bi();
 
--- DROP TRIGGER IF EXISTS tg_1_COBROS_biu ON COBROS;
+-- DROP TRIGGER IF EXISTS tg_1_COBROS_bu ON COBROS;
+-- DROP TRIGGER IF EXISTS tg_1_COBROS_bi ON COBROS;
 -- DROP TRIGGER IF EXISTS tg_2_PAGOS_bi ON PAGOS;
--- DROP FUNCTION IF EXISTS fc_tg_1_COBROS_biu();
+-- DROP FUNCTION IF EXISTS fc_tg_1_COBROS_bu();
+-- DROP FUNCTION IF EXISTS fc_tg_1_COBROS_bi();
 -- DROP FUNCTION IF EXISTS fc_tg_2_PAGOS_bi();
 
--- DROP TRIGGER IF EXISTS tg_1_PAGOS_bud ON PAGOS;
+-- DROP TRIGGER IF EXISTS tg_1_PAGOS_bd ON PAGOS;
+-- DROP TRIGGER IF EXISTS tg_1_PAGOS_bu ON PAGOS;
 -- DROP TRIGGER IF EXISTS tg_2_DETALLE_COMPRAS_bi ON DETALLE_COMPRAS;
--- DROP TRIGGER IF EXISTS tg_1_DETALLE_COMPRAS_biud ON DETALLE_COMPRAS;
+-- DROP TRIGGER IF EXISTS tg_1_DETALLE_COMPRAS_bd ON DETALLE_COMPRAS;
+-- DROP TRIGGER IF EXISTS tg_1_DETALLE_COMPRAS_bu ON DETALLE_COMPRAS;
+-- DROP TRIGGER IF EXISTS tg_1_DETALLE_COMPRAS_bi ON DETALLE_COMPRAS;
 -- DROP TRIGGER IF EXISTS tg_1_COMPRAS_bi ON COMPRAS;
 -- DROP TRIGGER IF EXISTS tg_1_COMPRAS_bu ON COMPRAS;
--- DROP FUNCTION IF EXISTS fc_tg_1_PAGOS_bud();
+-- DROP FUNCTION IF EXISTS fc_tg_1_PAGOS_bd();
+-- DROP FUNCTION IF EXISTS fc_tg_1_PAGOS_bu();
 -- DROP FUNCTION IF EXISTS fc_tg_2_DETALLE_COMPRAS_bi();
--- DROP FUNCTION IF EXISTS fc_tg_1_DETALLE_COMPRAS_biud();
+-- DROP FUNCTION IF EXISTS fc_tg_1_DETALLE_COMPRAS_bd();
+-- DROP FUNCTION IF EXISTS fc_tg_1_DETALLE_COMPRAS_bu();
+-- DROP FUNCTION IF EXISTS fc_tg_1_DETALLE_COMPRAS_bi();
 -- DROP FUNCTION IF EXISTS fc_tg_1_COMPRAS_bi();
 -- DROP FUNCTION IF EXISTS fc_tg_1_COMPRAS_bu();
 -- ALTER TABLE COMPRAS ALTER COLUMN fecha DROP DEFAULT;
@@ -1236,7 +1330,7 @@ INSERT INTO DETALLE_ORDENES (item, valor_cobrado, estado, fecha_inicio, fecha_fi
     (1, 1900000.00, 'F', '2026-10-19', '2026-10-21', 'CS05', 'OS26-00000021', '1313131313', 6, NULL),
     (1, 750000.00, 'E', '2026-11-04', NULL, 'CS06', 'OS26-00000022', '1414141414', NULL, NULL);
 
--- Las ordenes se cierran despues de tener sus detalles (al cancelar, los detalles en proceso quedan cancelados)
+-- Las ordenes se cierran despues de tener sus detalles (para saltar las restricciones)
 UPDATE SERVICIOS SET estado = 'F', fecha_fin = '2026-09-15' WHERE numero = 'OS26-00000002';
 UPDATE SERVICIOS SET estado = 'F', fecha_fin = '2026-10-06' WHERE numero = 'OS26-00000003';
 UPDATE SERVICIOS SET estado = 'F', fecha_fin = '2026-09-08' WHERE numero = 'OS26-00000005';
@@ -1742,11 +1836,11 @@ END;
 $$ LANGUAGE plpgsql;
 
 
---Los servicios no se eliminan: un servicio que no continua se cancela.
+--Los servicios no se eliminan
 CREATE OR REPLACE FUNCTION SV_SERVICIOS.de(empleado VARCHAR, numero VARCHAR)
 RETURNS VOID AS $$
 BEGIN
-    RAISE EXCEPTION 'No se permite eliminar los servicios; un servicio que no continua se cancela';
+    RAISE EXCEPTION 'No se permite eliminar los servicios';
 END;
 $$ LANGUAGE plpgsql;
 
@@ -2123,15 +2217,15 @@ SELECT SV_SERVICIOS.ad('3030303030', 'ZZZ999');
 SELECT SV_SERVICIOS.up('3030303030', 'OS26-00000002', 'C');
 
 -- Caso 3: Los servicios no se pueden eliminar, ni siquiera los cancelados (OS26-00000004)
--- de lanza 'No se permite eliminar los servicios; un servicio que no continua se cancela'
+-- de lanza 'No se permite eliminar los servicios'
 SELECT SV_SERVICIOS.de('8080808080', 'OS26-00000004');
 
 -- Caso 4: La sede S01 no tiene habilitado el servicio CS03
--- tg_1_DETALLE_ORDENES_biud lanza 'La sede no tiene habilitado ese servicio del catalogo'
+-- tg_1_DETALLE_ORDENES_bi lanza 'La sede no tiene habilitado ese servicio del catalogo'
 SELECT SV_SERVICIOS.ad_detalle('3030303030', 'OS26-00000001', 'CS03', NULL);
 
 -- Caso 5: No se agregan detalles a un servicio finalizado (OS26-00000002)
--- tg_1_DETALLE_ORDENES_biud lanza 'Solo se pueden agregar detalles a los servicios en proceso'
+-- tg_1_DETALLE_ORDENES_bi lanza 'Solo se pueden agregar detalles a los servicios en proceso'
 SELECT SV_SERVICIOS.ad_detalle('3030303030', 'OS26-00000002', 'CS01', NULL);
 
 -- Caso 6: El item 2 de OS26-00000001 no tiene horas trabajadas, no se puede finalizar
@@ -2154,7 +2248,7 @@ SELECT SV_SERVICIOS.ad('1010101010', 'ABC123');
 -- ad_detalle lanza 'El servicio no existe o no pertenece a la sede del empleado'
 SELECT SV_SERVICIOS.ad_detalle('8080808080', 'OS26-00000001', 'CS01', NULL);
 
--- Caso 11: El item 1 de OS26-00000001 es de 2020202020; otro tecnico no lo puede modificar
+-- Caso 11: El item 1 de OS26-00000001 es de 2020202020 otro tecnico no lo puede modificar
 -- up_detalle lanza 'El detalle no existe o no esta asignado al tecnico'
 SELECT SV_SERVICIOS.up_detalle('5050505050', 'OS26-00000001', 1, 'F', 1);
 
@@ -2163,84 +2257,44 @@ SELECT SV_SERVICIOS.up_detalle('5050505050', 'OS26-00000001', 1, 'F', 1);
 SELECT SV_SERVICIOS.up('3030303030', 'OS26-00000001', 'F');
 
 -- Caso 13: El tecnico 6060606060 trabaja en S02, no se le puede asignar un detalle de una orden de S01
--- tg_1_DETALLE_ORDENES_biud lanza 'El tecnico no trabaja en la sede del servicio'
+-- tg_1_DETALLE_ORDENES_bi lanza 'El tecnico no trabaja en la sede del servicio'
 SELECT SV_SERVICIOS.ad_detalle('3030303030', 'OS26-00000001', 'CS01', '6060606060');
 
--- Caso 14: No se agregan detalles a una orden finalizada (INSERT directo)
--- tg_1_DETALLE_ORDENES_biud lanza 'Solo se pueden agregar detalles a los servicios en proceso'
-INSERT INTO DETALLE_ORDENES (item, estado, fecha_inicio, catalogo_servicio, servicio) VALUES (2, 'E', '2026-09-14', 'CS01', 'OS26-00000002');
-
--- Caso 15: No se modifican los detalles de una orden finalizada (UPDATE directo)
--- tg_1_DETALLE_ORDENES_biud lanza 'Solo se pueden modificar los detalles de los servicios en proceso'
-UPDATE DETALLE_ORDENES SET horas_trabajadas = 5 WHERE servicio = 'OS26-00000002' AND item = 1;
-
--- Caso 16: El valor cobrado de un detalle no se cambia (UPDATE directo)
--- tg_1_DETALLE_ORDENES_biud lanza 'Del detalle no se puede cambiar el servicio, el item, el servicio del catalogo ni el valor cobrado'
-UPDATE DETALLE_ORDENES SET valor_cobrado = 1 WHERE servicio = 'OS26-00000001' AND item = 1;
-
--- Caso 17: El tecnico 2020202020 no registra compras
+-- Caso 14: El tecnico 2020202020 no registra compras
 -- ad lanza 'El empleado no es gerente de ninguna sede'
 SELECT SV_COMPRAS.ad('2020202020', '900123456');
 
--- Caso 18: El proveedor 900123456 no tiene precio de referencia para las pastillas (R002) y no se indica precio
+-- Caso 15: El proveedor 900123456 no tiene precio de referencia para las pastillas (R002) y no se indica precio
 -- tg_2_DETALLE_COMPRAS_bi lanza 'Se debe indicar el precio por unidad, el proveedor no tiene precio de referencia para ese repuesto'
 SELECT SV_COMPRAS.ad_detalle('3030303030', 'C000000010', 'R002', 1, NULL);
 
--- Caso 19: La compra C01 ya tiene pago
--- tg_1_DETALLE_COMPRAS_biud lanza 'La compra ya tiene pago y no se puede modificar'
+-- Caso 16: La compra C01 ya tiene pago
+-- tg_1_DETALLE_COMPRAS_bi lanza 'La compra ya tiene pago y no se puede modificar'
 SELECT SV_COMPRAS.ad_detalle('3030303030', 'C01', 'R001', 5, NULL);
 
--- Caso 20: El repuesto R001 ya esta en la compra C000000010
+-- Caso 17: El repuesto R001 ya esta en la compra C000000010
 -- PK_DETALLE_COMPRAS rechaza el insert
 SELECT SV_COMPRAS.ad_detalle('3030303030', 'C000000010', 'R001', 5, NULL);
 
--- Caso 21: La cantidad comprada debe ser mayor a cero
+-- Caso 18: La cantidad comprada debe ser mayor a cero
 -- CK_DETALLE_COMPRAS_CANTIDAD rechaza el update
 SELECT SV_COMPRAS.up_detalle('3030303030', 'C000000010', 'R001', 0, NULL);
 
--- Caso 22: La compra C01 ya tiene pago, no se puede eliminar
--- de lanza 'La compra ya tiene pago y no se puede eliminar' (y FK_PAGOS_COMPRA rechaza el DELETE directo)
+-- Caso 19: La compra C01 ya tiene pago, no se puede eliminar
+-- de lanza 'La compra ya tiene pago y no se puede eliminar' y la FK_PAGOS_COMPRA rechaza el DELETE directo
 SELECT SV_COMPRAS.de('3030303030', 'C01');
 
--- Caso 23: La compra C000000010 ya tiene detalles, no se le puede cambiar el proveedor
+-- Caso 20: La compra C000000010 ya tiene detalles, no se le puede cambiar el proveedor
 -- tg_1_COMPRAS_bu lanza 'No se puede cambiar el proveedor de una compra que ya tiene detalles'
 SELECT SV_COMPRAS.up('3030303030', 'C000000010', '900654321');
 
--- Caso 24: Un tecnico no modifica compras, aunque sean de su sede
+-- Caso 21: Un tecnico no modifica compras, aunque sean de su sede
 -- up_detalle lanza 'La compra no existe o no pertenece a la sede del gerente'
 SELECT SV_COMPRAS.up_detalle('2020202020', 'C000000010', 'R001', 1, NULL);
 
--- Caso 25: La gerente de S02 no puede eliminar una compra de S01
+-- Caso 22: La gerente de S02 no puede eliminar una compra de S01
 -- de lanza 'La compra no existe o no pertenece a la sede del gerente'
 SELECT SV_COMPRAS.de('8080808080', 'C000000010');
-
--- Caso 26: El tecnico 6060606060 (S02) no consulta compras de otra sede
--- co_valorTotal lanza 'La compra no existe o no pertenece a la sede del empleado'
-SELECT SV_COMPRAS.co_valorTotal('6060606060', 'C000000010');
-
--- Caso 27: La fecha de una compra no se modifica (UPDATE directo)
--- tg_1_COMPRAS_bu lanza 'De una compra solo se puede modificar el proveedor'
-UPDATE COMPRAS SET fecha = '2026-01-01' WHERE numero = 'C000000010';
-
--- Caso 28: Aunque lo haga el administrador, no se borran detalles de una compra pagada (DELETE directo)
--- tg_1_DETALLE_COMPRAS_biud lanza 'La compra ya tiene pago y no se puede modificar'
-DELETE FROM DETALLE_COMPRAS WHERE compra = 'C01';
-
--- Caso 29: Los pagos no se borran (DELETE directo); si se pudiera, la compra C01 quedaria otra vez modificable
--- tg_1_PAGOS_bud lanza 'Los pagos no se pueden modificar ni eliminar'
-DELETE FROM PAGOS WHERE compra = 'C01';
-
--- Caso 30: La fecha de una compra no puede ser futura (INSERT directo)
--- tg_1_COMPRAS_bi lanza 'La fecha de la compra no puede ser futura'
-INSERT INTO COMPRAS (numero, fecha, sede, proveedor) VALUES ('C99', '2099-01-01', 'S01', '900123456');
-
--- Caso 31: El movimiento M01 ya es el cobro de la orden OS26-00000002; no puede ser tambien el pago de una compra
--- tg_2_PAGOS_bi lanza 'El movimiento ya esta registrado como cobro, no puede ser tambien un pago'
-INSERT INTO PAGOS (movimiento, fecha_pago, compra) VALUES ('M01', '2026-09-15', 'C000000010');
-
--- Caso 32: El movimiento M02 ya es el pago de la compra C01; no puede ser tambien el cobro de una orden
--- tg_1_COBROS_biu lanza 'El movimiento ya esta registrado como pago, no puede ser tambien un cobro'
-INSERT INTO COBROS (movimiento, medio_pago, fecha_expedido, orden) VALUES ('M02', 'E', '2026-11-03', 'OS26-00000001');
 */
 
 
@@ -2638,3 +2692,259 @@ SELECT SV_TECNICO.co_valorTotalCompra('6060606060', 'C000000010');
 
 
 */
+
+
+
+
+
+
+/* CRUD de COMPRAS
+
+COMO gerente
+QUIERO mantener las compras de repuestos de mi sede
+PARA PODER abastecer el inventario y saber cuanto se le debe a cada proveedor
+-
+Adicion
+------------
+Se debe asignar automaticamente el numero (C#########) y la fecha (hoy)
+SQ_COMPRAS_numero y valores por omision de numero y fecha
+La fecha de la compra no puede ser futura.
+tg_1_COMPRAS_bi (tg.restringe)
+Solo el gerente registra compras, y siempre para su propia sede.
+SV_COMPRAS.ad (componente)
+La compra la hace una sede existente a un proveedor registrado.
+FK_COMPRAS_SEDE, FK_COMPRAS_PROVEEDOR
+Cada detalle se identifica por el repuesto dentro de la compra: un repuesto aparece una sola vez por compra.
+PK_DETALLE_COMPRAS, FK_DETALLE_COMPRAS_REPUESTO
+La cantidad comprada debe ser mayor a cero.
+CK_DETALLE_COMPRAS_CANTIDAD
+Si no se indica el precio por unidad se toma el precio de referencia del proveedor
+si el proveedor no tiene precio de referencia para ese repuesto, el precio se debe indicar.
+tg_2_DETALLE_COMPRAS_bi (tg.automatiza)
+-
+Modificacion
+---------------------
+Solo el gerente de la sede de la compra la modifica.
+SV_COMPRAS.up, SV_COMPRAS.ad_detalle, SV_COMPRAS.up_detalle, SV_COMPRAS.de_detalle (componente)
+Una compra que ya tiene pago no se puede modificar. De una compra solo cambia el proveedor,
+y solo mientras no tenga detalles; el numero, la fecha y la sede no cambian.
+tg_1_COMPRAS_bu (tg.restringe)
+Los detalles de una compra que ya tiene pago no se agregan, no se modifican y no se eliminan.
+tg_1_DETALLE_COMPRAS_bi, tg_1_DETALLE_COMPRAS_bu, tg_1_DETALLE_COMPRAS_bd (tg.restringe)
+Los pagos de las compras no se modifican ni se eliminan.
+tg_1_PAGOS_bu, tg_1_PAGOS_bd (tg.restringe)
+-
+Eliminacion
+-------------------
+Solo el gerente de la sede de la compra la elimina.
+SV_COMPRAS.de (componente)
+Una compra que ya tiene pago no se puede eliminar.
+SV_COMPRAS.de (componente), FK_PAGOS_COMPRA
+Con la compra se eliminan sus detalles.
+FK_DETALLE_COMPRAS_COMPRA (ON DELETE CASCADE) */
+
+
+
+--Pruebas
+/*
+Laura Moreno, la gerente de la Sede Sur, revisa los repuestos por agotarse y ve que le quedan
+pocas pastillas de freno. Decide hacerle un pedido a Frenos Ya LTDA. Mientras arma la compra
+intenta incluir filtros de aceite sin decir el precio, pero no hay un precio de referencia de
+Frenos Ya para ese repuesto. Luego corrige la
+cantidad de pastillas y el precio que le dieron por telefono. Jorge, un tecnico de la sede,
+intenta cambiar la cantidad de la compra y el sistema no lo deja, solo la gerente la modifica.
+*/
+BEGIN;
+
+-- Paso 1 : Laura consulta los repuestos por agotarse de su sede y abre una compra
+--      a "Frenos Ya LTDA". Queda con el numero consecutivo, la fecha de hoy y en la sede de Laura (S02).
+SELECT SV_GERENTE.co_repuestosPorAgotarseSede('8080808080');
+FETCH ALL IN "co_porAgotarse";
+CLOSE "co_porAgotarse";
+SELECT SV_GERENTE.ad_compra('8080808080', '900654321');
+SELECT * FROM COMPRAS WHERE numero = 'C000000013';
+
+-- Paso 2 : Laura agrega 12 pastillas de freno (R002) sin indicar precio
+--      y se toma el precio de referencia del proveedor (45000). Luego intenta agregar filtros
+--      de aceite (R001) sin precio. "Frenos Ya" no tiene precio de referencia para ese repuesto
+--      y el sistema le pide indicarlo.
+SELECT SV_GERENTE.ad_detalle_compra('8080808080', 'C000000013', 'R002', 12, NULL);
+DO $$
+BEGIN
+    PERFORM SV_GERENTE.ad_detalle_compra('8080808080', 'C000000013', 'R001', 5, NULL);
+    RAISE NOTICE 'FALLA LA PRUEBA: se agrego un detalle sin precio';
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Rechazado como se esperaba: %', SQLERRM;
+END;
+$$;
+
+-- Paso 3 : Laura se equivoca y deja la cantidad en cero el sistema
+--      lo rechaza. Luego la corrige a 10 unidades a 44000 cada una.
+DO $$
+BEGIN
+    PERFORM SV_GERENTE.up_detalle_compra('8080808080', 'C000000013', 'R002', 0, NULL);
+    RAISE NOTICE 'FALLA LA PRUEBA: se acepto una cantidad de cero';
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Rechazado como se esperaba: %', SQLERRM;
+END;
+$$;
+SELECT SV_GERENTE.up_detalle_compra('8080808080', 'C000000013', 'R002', 10, 44000);
+
+-- Paso 4 : Jorge, tecnico de la Sede Sur, intenta subir la cantidad de la compra
+--      y el sistema lo rechaza: las compras solo las modifica la gerente.
+DO $$
+BEGIN
+    PERFORM SV_COMPRAS.up_detalle('6060606060', 'C000000013', 'R002', 50, NULL);
+    RAISE NOTICE 'FALLA LA PRUEBA: un tecnico modifico una compra';
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Rechazado como se esperaba: %', SQLERRM;
+END;
+$$;
+
+-- Paso 5 : Laura verifica que la compra quedo bien: un solo detalle de 10 pastillas
+--      a 44000, valor total de 440000, y las pastillas disponibles en su sede aumentaron en 10.
+SELECT  c.numero, c.fecha, c.sede, c.proveedor,
+        dc.repuesto, dc.cantidad, dc.precio_unidad
+FROM COMPRAS c
+JOIN DETALLE_COMPRAS dc ON dc.compra = c.numero
+WHERE c.numero = 'C000000013';
+SELECT SV_GERENTE.co_valorTotalCompra('8080808080', 'C000000013');
+SELECT SV_GERENTE.co_repuestosPorAgotarseSede('8080808080');
+FETCH ALL IN "co_porAgotarse";
+
+ROLLBACK;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* CRUD de SERVICIOS
+
+COMO gerente
+QUIERO mantener las ordenes de servicio de mi sede
+PARA PODER llevar el control de los trabajos que se le hacen a cada vehiculo
+-
+Adicion
+------------
+Se debe asignar automaticamente el numero (OSAA-########), la fecha de inicio (hoy) y el estado (en proceso)
+SQ_SERVICIOS_numero y valores por omision de numero, fecha_inicio y estado
+La fecha de inicio no puede ser futura.
+tg_1_SERVICIOS_bi (tg.restringe)
+El servicio se realiza sobre un vehiculo registrado y en una sede existente.
+FK_SERVICIOS_VEHICULO, FK_SERVICIOS_SEDE
+Cada detalle se identifica por su item dentro del servicio y aplica un servicio del catalogo.
+PK_DETALLE_ORDENES, CK_DETALLE_ORDENES_ITEM, FK_DETALLE_ORDENES_CATALOGO_SERVICIO
+Solo se agregan detalles a servicios en proceso y de servicios del catalogo que la sede tiene habilitados.
+El valor cobrado es el precio local de la sede; si no tiene, el precio base del catalogo.
+SV_SERVICIOS.ad_detalle (componente)
+Quien ejecuta el detalle debe ser un tecnico.
+FK_DETALLE_ORDENES_TECNICO
+-
+Modificacion
+---------------------
+Los servicios finalizados o cancelados no se pueden modificar y la fecha de inicio no puede quedar en el futuro.
+tg_1_SERVICIOS_bu (tg.restringe)
+Al finalizar un servicio la fecha de fin se asigna automaticamente.
+tg_2_SERVICIOS_bu (tg.automatiza), CK_SERVICIOS_ESTADO_FECHA_FIN, CK_SERVICIOS_FECHAS
+Al cancelar un servicio sus detalles en proceso quedan cancelados automaticamente.
+tg_1_SERVICIOS_au (tg.automatiza)
+Un detalle solo se puede finalizar si tiene tecnico, horas trabajadas y fecha de fin.
+CK_DETALLE_ORDENES_ESTADO_TECNICO, CK_DETALLE_ORDENES_ESTADO_FECHA_FIN, CK_DETALLE_ORDENES_FECHAS
+Las horas trabajadas deben ser mayores a cero.
+CK_DETALLE_ORDENES_HORAS_TRABAJADAS
+-
+Eliminacion
+-------------------
+No esta permitido eliminar un servicio; un servicio que no continua se cancela.
+tg_2_SERVICIOS_bd (tg.restringe) */
+
+
+
+
+--Pruebas
+/*
+Ana Gomez lleva su Chevrolet DEF-456 a la Sede Norte porque le toca el cambio de aceite.
+La recibe Luis Perez, tecnico de la sede, que abre la orden de servicio y se asigna el
+trabajo. Ana pregunta si de una vez le pueden hacer la alineacion, pero la Sede Norte no
+tiene habilitado ese servicio. Luis tambien quiere pasarle la revision de frenos a Jorge,
+pero Jorge trabaja en la Sede Sur. Camila, la otra tecnica de la sede, intenta registrar
+horas en el trabajo de Luis y el sistema no la deja. Luis hace el cambio de aceite,
+registra su diagnostico y sus horas, y cierra la orden para cobrarla.
+*/
+BEGIN;
+
+-- Paso 1 : Luis abre la orden para el vehiculo DEF456.
+--      Queda con el numero consecutivo, la fecha de hoy, en estado E y en la sede de Luis (S01).
+SELECT SV_TECNICO.ad_servicio('2020202020', 'DEF456');
+SELECT * FROM SERVICIOS WHERE numero = 'OS26-00000026';
+
+-- Paso 2 : Luis agrega el cambio de aceite (CS01) y se lo asigna a si mismo.
+--      Queda como item 1, en estado E y con el precio local de S01 (160000).
+--      Luego intenta agregar la alineacion (CS03), que S01 no tiene habilitada, y el sistema lo rechaza.
+SELECT SV_TECNICO.ad_detalle_servicio('2020202020', 'OS26-00000026', 'CS01', '2020202020');
+DO $$
+BEGIN
+    PERFORM SV_TECNICO.ad_detalle_servicio('2020202020', 'OS26-00000026', 'CS03', '2020202020');
+    RAISE NOTICE 'FALLA LA PRUEBA: se agrego un servicio que la sede no tiene habilitado';
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Rechazado como se esperaba: %', SQLERRM;
+END;
+$$;
+
+-- Paso 3 : Luis intenta agregar la revision de frenos (CS02) asignada a Jorge,
+--      que trabaja en la Sede Sur, y el sistema lo rechaza.
+DO $$
+BEGIN
+    PERFORM SV_TECNICO.ad_detalle_servicio('2020202020', 'OS26-00000026', 'CS02', '6060606060');
+    RAISE NOTICE 'FALLA LA PRUEBA: se asigno un trabajo a un tecnico de otra sede';
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Rechazado como se esperaba: %', SQLERRM;
+END;
+$$;
+
+-- Paso 4 : Camila intenta registrar horas en el trabajo de Luis y el sistema lo rechaza.
+--      Luis intenta cerrar la orden con el cambio de aceite aun en proceso y el sistema lo rechaza.
+DO $$
+BEGIN
+    PERFORM SV_TECNICO.up_detalle_servicio('5050505050', 'OS26-00000026', 1, 'F', 2);
+    RAISE NOTICE 'FALLA LA PRUEBA: una tecnica registro trabajo en un detalle que no es suyo';
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Rechazado como se esperaba: %', SQLERRM;
+END;
+$$;
+DO $$
+BEGIN
+    PERFORM SV_TECNICO.up_servicio('2020202020', 'OS26-00000026', 'F');
+    RAISE NOTICE 'FALLA LA PRUEBA: se finalizo una orden con detalles en proceso';
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Rechazado como se esperaba: %', SQLERRM;
+END;
+$$;
+
+-- Paso 5 : Luis registra el diagnostico y 1.5 horas, finaliza su trabajo y cierra la orden.
+--      La fecha de fin se asigna automaticamente y el valor total a cobrar es 160000.
+--      Se verifica que la orden y su detalle quedaron en F, con fecha de fin, tecnico, horas,
+--      valor y diagnostico.
+SELECT SV_TECNICO.up_diagnostico_servicio('2020202020', 'OS26-00000026', 1,
+    '{"sintomas": ["testigo de cambio de aceite encendido"], "hallazgos": "Aceite degradado y filtro saturado", "recomendaciones": ["proximo cambio en 5000 km"]}');
+SELECT SV_TECNICO.up_detalle_servicio('2020202020', 'OS26-00000026', 1, 'F', 1.5);
+SELECT SV_TECNICO.up_servicio('2020202020', 'OS26-00000026', 'F');
+SELECT SV_TECNICO.co_valorTotalServicio('2020202020', 'OS26-00000026');
+SELECT  s.numero, s.estado AS estadoOrden, s.fecha_fin AS finOrden,
+        d.item, d.estado AS estadoDetalle, d.fecha_fin AS finDetalle,
+        d.tecnico, d.horas_trabajadas, d.valor_cobrado,
+        d.diagnostico ->> 'hallazgos' AS hallazgos
+FROM SERVICIOS s
+JOIN DETALLE_ORDENES d ON d.servicio = s.numero
+WHERE s.numero = 'OS26-00000026';
+
+ROLLBACK;
