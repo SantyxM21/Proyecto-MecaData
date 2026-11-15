@@ -49,7 +49,8 @@ CREATE TABLE DETALLE_ORDENES(
     catalogo_servicio VARCHAR(10) NOT NULL,
     servicio T_NUMERO_ORDEN NOT NULL,
     tecnico VARCHAR(15),
-    horas_trabajadas NUMERIC
+    horas_trabajadas NUMERIC,
+    diagnostico JSONB
 );
 
 CREATE TABLE GARANTIAS(
@@ -140,7 +141,6 @@ CREATE TABLE COMPRAS(
 );
 
 CREATE TABLE DETALLE_COMPRAS(
-    id VARCHAR(10) NOT NULL,
     cantidad INTEGER NOT NULL,
     precio_unidad T_MONEDA NOT NULL,
     compra VARCHAR(10) NOT NULL,

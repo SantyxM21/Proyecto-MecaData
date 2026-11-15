@@ -34,3 +34,7 @@ INSERT INTO DETALLE_ORDENES (item, valor_cobrado, estado, fecha_inicio, fecha_fi
 -- Nulidad: toda garantia debe tener fecha de fin
 INSERT INTO GARANTIAS (numero, fecha_inicio, fecha_fin, condiciones, estado, servicio, item) VALUES
     ('G04', '2026-06-01', NULL, 'Sin fecha de fin', 'V', 'OS26-00000001', 1);
+
+-- Estructura JSON: el diagnostico debe traer los sintomas
+INSERT INTO DETALLE_ORDENES (item, valor_cobrado, estado, fecha_inicio, fecha_fin, catalogo_servicio, servicio, tecnico, horas_trabajadas, diagnostico) VALUES
+    (2, 150000.00, 'E', '2026-11-03', NULL, 'CS01', 'OS26-00000001', NULL, NULL, '{"hallazgos": "Fuga en el carter"}');

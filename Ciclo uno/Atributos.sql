@@ -26,6 +26,21 @@ ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT CK_DETALLE_ORDENES_ITEM
 ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT CK_DETALLE_ORDENES_HORAS_TRABAJADAS
     CHECK (horas_trabajadas > 0);
 
+--Estructura del diagnostico: objeto con sintomas (arreglo no vacio), hallazgos (texto)
+--y, opcionalmente recomendaciones (arreglo)
+ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT CK_DETALLE_ORDENES_DIAGNOSTICO
+    CHECK (diagnostico IS NULL OR (
+        jsonb_typeof(diagnostico) = 'object'
+        AND diagnostico ? 'sintomas'
+        AND diagnostico ? 'hallazgos'
+        AND CASE WHEN jsonb_typeof(diagnostico -> 'sintomas') = 'array'
+                THEN jsonb_array_length(diagnostico -> 'sintomas') > 0
+                ELSE FALSE END
+        AND jsonb_typeof(diagnostico -> 'hallazgos') = 'string'
+        AND (NOT diagnostico ? 'recomendaciones'
+            OR jsonb_typeof(diagnostico -> 'recomendaciones') = 'array')
+    ));
+
 ALTER TABLE TRASLADOS ADD CONSTRAINT CK_TRASLADOS_CANTIDAD
     CHECK (cantidad > 0);
 
