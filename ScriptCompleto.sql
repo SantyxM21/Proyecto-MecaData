@@ -347,120 +347,91 @@ ALTER TABLE PAGOS ADD CONSTRAINT UK_PAGOS_COMPRA
 --Foraneas
 
 ALTER TABLE CLIENTES ADD CONSTRAINT FK_CLIENTES_PERSONA
-    FOREIGN KEY (persona) REFERENCES PERSONAS(cedula)
-    ON DELETE CASCADE;
+    FOREIGN KEY (persona) REFERENCES PERSONAS(cedula);
 
 ALTER TABLE EMPLEADOS ADD CONSTRAINT FK_EMPLEADOS_PERSONA
-    FOREIGN KEY (persona) REFERENCES PERSONAS(cedula)
-    ON DELETE CASCADE;
+    FOREIGN KEY (persona) REFERENCES PERSONAS(cedula);
 
 ALTER TABLE EMPLEADOS ADD CONSTRAINT FK_EMPLEADOS_SEDE
-    FOREIGN KEY (sede) REFERENCES SEDES(numero)
-    ON DELETE RESTRICT;
+    FOREIGN KEY (sede) REFERENCES SEDES(numero);
 
 ALTER TABLE TECNICOS ADD CONSTRAINT FK_TECNICOS_EMPLEADO
-    FOREIGN KEY (empleado) REFERENCES EMPLEADOS(persona)
-    ON DELETE CASCADE;
+    FOREIGN KEY (empleado) REFERENCES EMPLEADOS(persona);
 
 ALTER TABLE AUTOMOVILES ADD CONSTRAINT FK_AUTOMOVILES_VEHICULO
-    FOREIGN KEY (vehiculo) REFERENCES VEHICULOS(placa)
-    ON DELETE CASCADE;
+    FOREIGN KEY (vehiculo) REFERENCES VEHICULOS(placa);
 
 ALTER TABLE VEHICULOS ADD CONSTRAINT FK_VEHICULOS_CLIENTE
-    FOREIGN KEY (cliente) REFERENCES CLIENTES(persona)
-    ON DELETE RESTRICT;
+    FOREIGN KEY (cliente) REFERENCES CLIENTES(persona);
 
 ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT FK_DETALLE_ORDENES_CATALOGO_SERVICIO
-    FOREIGN KEY (catalogo_servicio) REFERENCES CATALOGO_SERVICIOS(codigo)
-    ON DELETE RESTRICT;
+    FOREIGN KEY (catalogo_servicio) REFERENCES CATALOGO_SERVICIOS(codigo);
 
 ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT FK_DETALLE_ORDENES_SERVICIO
-    FOREIGN KEY (servicio) REFERENCES SERVICIOS(numero)
-    ON DELETE CASCADE;
+    FOREIGN KEY (servicio) REFERENCES SERVICIOS(numero);
 
 ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT FK_DETALLE_ORDENES_TECNICO
-    FOREIGN KEY (tecnico) REFERENCES TECNICOS(empleado)
-    ON DELETE RESTRICT;
+    FOREIGN KEY (tecnico) REFERENCES TECNICOS(empleado);
 
 ALTER TABLE GARANTIAS ADD CONSTRAINT FK_GARANTIAS_DETALLE_ORDEN
-    FOREIGN KEY (servicio, item) REFERENCES DETALLE_ORDENES(servicio, item)
-    ON DELETE RESTRICT;
+    FOREIGN KEY (servicio, item) REFERENCES DETALLE_ORDENES(servicio, item);
 
 ALTER TABLE SERVICIOS ADD CONSTRAINT FK_SERVICIOS_VEHICULO
-    FOREIGN KEY (vehiculo) REFERENCES VEHICULOS(placa)
-    ON DELETE RESTRICT;
+    FOREIGN KEY (vehiculo) REFERENCES VEHICULOS(placa);
 
 ALTER TABLE SERVICIOS ADD CONSTRAINT FK_SERVICIOS_SEDE
-    FOREIGN KEY (sede) REFERENCES SEDES(numero)
-    ON DELETE RESTRICT;
+    FOREIGN KEY (sede) REFERENCES SEDES(numero);
 
 ALTER TABLE OFERTAS_SERVICIOS ADD CONSTRAINT FK_OFERTAS_SERVICIOS_CATALOGO_SERVICIO
-    FOREIGN KEY (catalogo_servicio) REFERENCES CATALOGO_SERVICIOS(codigo)
-    ON DELETE RESTRICT;
+    FOREIGN KEY (catalogo_servicio) REFERENCES CATALOGO_SERVICIOS(codigo);
 
 ALTER TABLE OFERTAS_SERVICIOS ADD CONSTRAINT FK_OFERTAS_SERVICIOS_SEDE
-    FOREIGN KEY (sede) REFERENCES SEDES(numero)
-    ON DELETE RESTRICT;
+    FOREIGN KEY (sede) REFERENCES SEDES(numero);
 
 ALTER TABLE TRASLADOS ADD CONSTRAINT FK_TRASLADOS_SEDE_LLEGA
-    FOREIGN KEY (sede_llega) REFERENCES SEDES(numero)
-    ON DELETE RESTRICT;
+    FOREIGN KEY (sede_llega) REFERENCES SEDES(numero);
 
 ALTER TABLE TRASLADOS ADD CONSTRAINT FK_TRASLADOS_SEDE_SALE
-    FOREIGN KEY (sede_sale) REFERENCES SEDES(numero)
-    ON DELETE RESTRICT;
+    FOREIGN KEY (sede_sale) REFERENCES SEDES(numero);
 
 ALTER TABLE CONSUMOS ADD CONSTRAINT FK_CONSUMOS_REPUESTO
-    FOREIGN KEY (repuesto) REFERENCES REPUESTOS(serie)
-    ON DELETE RESTRICT;
+    FOREIGN KEY (repuesto) REFERENCES REPUESTOS(serie);
 
 ALTER TABLE CONSUMOS ADD CONSTRAINT FK_CONSUMOS_DETALLE_ORDEN
-    FOREIGN KEY (servicio, item) REFERENCES DETALLE_ORDENES(servicio, item)
-    ON DELETE CASCADE;
+    FOREIGN KEY (servicio, item) REFERENCES DETALLE_ORDENES(servicio, item);
 
 ALTER TABLE SUMINISTROS ADD CONSTRAINT FK_SUMINISTROS_PROVEEDOR
-    FOREIGN KEY (proveedor) REFERENCES PROVEEDORES(nit)
-    ON DELETE RESTRICT;
+    FOREIGN KEY (proveedor) REFERENCES PROVEEDORES(nit);
 
 ALTER TABLE SUMINISTROS ADD CONSTRAINT FK_SUMINISTROS_REPUESTO
-    FOREIGN KEY (repuesto) REFERENCES REPUESTOS(serie)
-    ON DELETE RESTRICT;
+    FOREIGN KEY (repuesto) REFERENCES REPUESTOS(serie);
 
 ALTER TABLE COMPRAS ADD CONSTRAINT FK_COMPRAS_SEDE
-    FOREIGN KEY (sede) REFERENCES SEDES(numero)
-    ON DELETE RESTRICT;
+    FOREIGN KEY (sede) REFERENCES SEDES(numero);
 
 ALTER TABLE COMPRAS ADD CONSTRAINT FK_COMPRAS_PROVEEDOR
-    FOREIGN KEY (proveedor) REFERENCES PROVEEDORES(nit)
-    ON DELETE RESTRICT;
+    FOREIGN KEY (proveedor) REFERENCES PROVEEDORES(nit);
 
 ALTER TABLE DETALLE_COMPRAS ADD CONSTRAINT FK_DETALLE_COMPRAS_COMPRA
-    FOREIGN KEY (compra) REFERENCES COMPRAS(numero)
-    ON DELETE CASCADE;
+    FOREIGN KEY (compra) REFERENCES COMPRAS(numero);
 
 ALTER TABLE DETALLE_COMPRAS ADD CONSTRAINT FK_DETALLE_COMPRAS_REPUESTO
-    FOREIGN KEY (repuesto) REFERENCES REPUESTOS(serie)
-    ON DELETE RESTRICT;
+    FOREIGN KEY (repuesto) REFERENCES REPUESTOS(serie);
 
 ALTER TABLE COBROS ADD CONSTRAINT FK_COBROS_MOVIMIENTO
-    FOREIGN KEY (movimiento) REFERENCES MOVIMIENTOS(numero)
-    ON DELETE RESTRICT;
+    FOREIGN KEY (movimiento) REFERENCES MOVIMIENTOS(numero);
 
 ALTER TABLE COBROS ADD CONSTRAINT FK_COBROS_ORDEN
-    FOREIGN KEY (orden) REFERENCES SERVICIOS(numero)
-    ON DELETE RESTRICT;
+    FOREIGN KEY (orden) REFERENCES SERVICIOS(numero);
 
 ALTER TABLE PAGOS ADD CONSTRAINT FK_PAGOS_MOVIMIENTO
-    FOREIGN KEY (movimiento) REFERENCES MOVIMIENTOS(numero)
-    ON DELETE RESTRICT;
+    FOREIGN KEY (movimiento) REFERENCES MOVIMIENTOS(numero);
 
 ALTER TABLE PAGOS ADD CONSTRAINT FK_PAGOS_COMPRA
-    FOREIGN KEY (compra) REFERENCES COMPRAS(numero)
-    ON DELETE RESTRICT;
+    FOREIGN KEY (compra) REFERENCES COMPRAS(numero);
 
 ALTER TABLE TRASLADOS ADD CONSTRAINT FK_TRASLADOS_REPUESTO
-    FOREIGN KEY (repuesto) REFERENCES REPUESTOS(serie)
-    ON DELETE RESTRICT;
+    FOREIGN KEY (repuesto) REFERENCES REPUESTOS(serie);
 
 
 
@@ -487,6 +458,33 @@ ALTER TABLE DETALLE_ORDENES ADD CONSTRAINT CK_DETALLE_ORDENES_ESTADO_TECNICO
 
 ALTER TABLE GARANTIAS ADD CONSTRAINT CK_GARANTIAS_FECHAS
     CHECK (fecha_fin >= fecha_inicio);
+
+--Acciones
+ALTER TABLE CLIENTES DROP CONSTRAINT FK_CLIENTES_PERSONA;
+ALTER TABLE CLIENTES ADD CONSTRAINT FK_CLIENTES_PERSONA
+    FOREIGN KEY (persona) REFERENCES PERSONAS(cedula)
+    ON DELETE CASCADE;
+
+ALTER TABLE EMPLEADOS DROP CONSTRAINT FK_EMPLEADOS_PERSONA;
+ALTER TABLE EMPLEADOS ADD CONSTRAINT FK_EMPLEADOS_PERSONA
+    FOREIGN KEY (persona) REFERENCES PERSONAS(cedula)
+    ON DELETE CASCADE;
+
+ALTER TABLE TECNICOS DROP CONSTRAINT FK_TECNICOS_EMPLEADO;
+ALTER TABLE TECNICOS ADD CONSTRAINT FK_TECNICOS_EMPLEADO
+    FOREIGN KEY (empleado) REFERENCES EMPLEADOS(persona)
+    ON DELETE CASCADE;
+
+ALTER TABLE AUTOMOVILES DROP CONSTRAINT FK_AUTOMOVILES_VEHICULO;
+ALTER TABLE AUTOMOVILES ADD CONSTRAINT FK_AUTOMOVILES_VEHICULO
+    FOREIGN KEY (vehiculo) REFERENCES VEHICULOS(placa)
+    ON DELETE CASCADE;
+
+ALTER TABLE DETALLE_COMPRAS DROP CONSTRAINT FK_DETALLE_COMPRAS_COMPRA;
+ALTER TABLE DETALLE_COMPRAS ADD CONSTRAINT FK_DETALLE_COMPRAS_COMPRA
+    FOREIGN KEY (compra) REFERENCES COMPRAS(numero)
+    ON DELETE CASCADE;
+
 
 --XTablas
 /*
@@ -2298,6 +2296,70 @@ SELECT SV_COMPRAS.de('8080808080', 'C000000010');
 */
 
 
+
+
+--ActoresE
+/*
+SV_GERENTE
+-- Servicios
+ad_servicio(gerente VARCHAR, vehiculo VARCHAR) : VARCHAR
+    Abre una orden de servicio en su sede y devuelve su numero
+up_servicio(gerente VARCHAR, numero VARCHAR, estado VARCHAR) : VOID
+    Finaliza o cancela una orden en proceso de su sede
+de_servicio(gerente VARCHAR, numero VARCHAR) : VOID
+    Las ordenes no se eliminan: siempre se rechaza
+ad_detalle_servicio(gerente VARCHAR, servicio VARCHAR, catalogo_servicio VARCHAR, tecnico VARCHAR) : INTEGER
+    Agrega un trabajo a una orden en proceso de su sede y devuelve su item
+co_valorTotalServicio(gerente VARCHAR, numero VARCHAR) : NUMERIC
+    Valor total de una orden de su sede
+co_serviciosEnProcesoSede(gerente VARCHAR) : REFCURSOR
+    Ordenes en proceso de su sede
+co_estadoServicioVehiculo(placa VARCHAR) : REFCURSOR
+    Avance del servicio en proceso de un vehiculo
+-- Compras
+ad_compra(gerente VARCHAR, proveedor VARCHAR) : VARCHAR
+    Registra una compra de su sede y devuelve su numero
+up_compra(gerente VARCHAR, numero VARCHAR, proveedor VARCHAR) : VOID
+    Cambia el proveedor de una compra de su sede sin detalles ni pago
+de_compra(gerente VARCHAR, numero VARCHAR) : VOID
+    Elimina una compra de su sede que no tiene pago
+ad_detalle_compra(gerente VARCHAR, compra VARCHAR, repuesto VARCHAR, cantidad INTEGER, precio_unidad NUMERIC) : VOID
+    Agrega un repuesto a una compra de su sede sin pago
+up_detalle_compra(gerente VARCHAR, compra VARCHAR, repuesto VARCHAR, cantidad INTEGER, precio_unidad NUMERIC) : VOID
+    Cambia la cantidad o el precio de un repuesto de una compra sin pago
+de_detalle_compra(gerente VARCHAR, compra VARCHAR, repuesto VARCHAR) : VOID
+    Quita un repuesto de una compra de su sede sin pago
+co_valorTotalCompra(gerente VARCHAR, numero VARCHAR) : NUMERIC
+    Valor total de una compra de su sede
+co_repuestosPorAgotarseSede(gerente VARCHAR) : REFCURSOR
+    Repuestos por agotarse en su sede
+
+SV_TECNICO
+-- Servicios
+ad_servicio(tecnico VARCHAR, vehiculo VARCHAR) : VARCHAR
+    Abre una orden de servicio en su sede y devuelve su numero
+up_servicio(tecnico VARCHAR, numero VARCHAR, estado VARCHAR) : VOID
+    Finaliza o cancela una orden en proceso de su sede
+de_servicio(tecnico VARCHAR, numero VARCHAR) : VOID
+    Las ordenes no se eliminan: siempre se rechaza
+ad_detalle_servicio(tecnico VARCHAR, servicio VARCHAR, catalogo_servicio VARCHAR, tecnico_asignado VARCHAR) : INTEGER
+    Agrega un trabajo a una orden en proceso de su sede y devuelve su item
+co_valorTotalServicio(tecnico VARCHAR, numero VARCHAR) : NUMERIC
+    Valor total de una orden de su sede
+co_serviciosEnProcesoSede(tecnico VARCHAR) : REFCURSOR
+    Ordenes en proceso de su sede
+co_estadoServicioVehiculo(placa VARCHAR) : REFCURSOR
+    Avance del servicio en proceso de un vehiculo
+up_detalle_servicio(tecnico VARCHAR, servicio VARCHAR, item INTEGER, estado VARCHAR, horas_trabajadas NUMERIC) : VOID
+    Registra las horas y el estado de un trabajo asignado a el
+up_diagnostico_servicio(tecnico VARCHAR, servicio VARCHAR, item INTEGER, diagnostico JSONB) : VOID
+    Registra el diagnostico de un trabajo asignado a el
+-- Compras
+co_valorTotalCompra(tecnico VARCHAR, numero VARCHAR) : NUMERIC
+    Valor total de una compra de su sede
+co_repuestosPorAgotarseSede(tecnico VARCHAR) : REFCURSOR
+    Repuestos por agotarse en su sede
+*/
 
 
 --Actores
