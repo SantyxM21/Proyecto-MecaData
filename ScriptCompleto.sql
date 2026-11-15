@@ -1,4 +1,4 @@
--- Active: 1792113215779@@127.0.0.1@5432@prueba
+-- Active: 1794333671248@@granate.is.escuelaing.edu.co@5432@db1000107428@public
 --Dominios
 CREATE DOMAIN T_PLACA AS VARCHAR(6)
     CHECK (VALUE ~ '^[A-Z]{3}[0-9]{3}$');
@@ -2532,6 +2532,14 @@ GRANT USAGE ON SCHEMA SV_TECNICO TO mecadata_tecnico;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA SV_TECNICO TO mecadata_tecnico;
 
 
+-- Alternativa
+/* GRANT USAGE ON SCHEMA SV_TECNICO TO db1000107428;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA SV_TECNICO TO db1000107428;
+
+GRANT USAGE ON SCHEMA SV_GERENTE TO db1000099272;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA SV_GERENTE TO db1000099272; */
+
+
 --XSeguridad
 /*
 REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA SV_GERENTE FROM mecadata_gerente;
@@ -2584,61 +2592,20 @@ SELECT SV_GERENTE.co_serviciosEnProcesoSede('3030303030');
 FETCH ALL IN "co_enProceso";
 COMMIT;
 
--- Caso 2: Agrega un cambio de aceite a la orden OS26-00000001. Queda como item 3
-SELECT SV_GERENTE.ad_detalle_servicio('3030303030', 'OS26-00000001', 'CS01', '2020202020');
-
--- Caso 3: Consulta el valor total de la orden: 405000 + 160000 = 565000
-SELECT SV_GERENTE.co_valorTotalServicio('3030303030', 'OS26-00000001');
-
--- Caso 4: La gerente de S02 abre una orden para el vehiculo DEF456. La sede se toma de la gerente
-SELECT SV_GERENTE.ad_servicio('8080808080', 'DEF456');
-
-
--- Cuenta: Tecnico
-
--- Caso 5: La tecnica 5050505050 registra 2 horas y finaliza su trabajo (item 2 de OS26-00000001)
-SELECT SV_TECNICO.up_detalle_servicio('5050505050', 'OS26-00000001', 2, 'F', 2);
-
--- Caso 6: El tecnico 6060606060 recibe el vehiculo GHI789 y abre la orden. La sede se toma del tecnico (S02)
-SELECT SV_TECNICO.ad_servicio('6060606060', 'GHI789');
-
-
--- Cuenta: Gerente
-
--- Caso 7: Confirma el avance del vehiculo ABC123: items 1 y 2 en F, item 3 en E
-BEGIN;
-SELECT SV_GERENTE.co_estadoServicioVehiculo('ABC123');
-FETCH ALL IN "co_estado";
-COMMIT;
-
-
--- Cuenta: Gerente
-
--- Caso 8: La gerente de S02 abre una compra al proveedor 900654321.
--- La sede se toma de la gerente y se asigna el numero C000000012
-SELECT SV_GERENTE.ad_compra('8080808080', '900654321');
-
--- Caso 9: Le agrega 8 pastillas de freno (R002) al precio de referencia (45000)
-SELECT SV_GERENTE.ad_detalle_compra('8080808080', 'C000000012', 'R002', 8, NULL);
-
--- Caso 10: Consulta el valor total de la compra: 8 x 45000 = 360000
-SELECT SV_GERENTE.co_valorTotalCompra('8080808080', 'C000000012');
-
--- Caso 11: La gerente de S01 sube a 30 las unidades de su compra C000000010
-SELECT SV_GERENTE.up_detalle_compra('3030303030', 'C000000010', 'R001', 30, NULL);
+-- Caso 2: Consulta el valor total de la compra C000000010 de su sede: 25 x 19000 = 475000
 SELECT SV_GERENTE.co_valorTotalCompra('3030303030', 'C000000010');
 
 
 -- Cuenta: Tecnico
 
--- Caso 12: El tecnico 6060606060 consulta los repuestos por agotarse en su sede (S02)
+-- Caso 3: La tecnica 5050505050 registra 2 horas y finaliza su trabajo (item 2 de OS26-00000001)
+SELECT SV_TECNICO.up_detalle_servicio('5050505050', 'OS26-00000001', 2, 'F', 2);
+
+-- Caso 4: El tecnico 6060606060 consulta los repuestos por agotarse en su sede (S02)
 BEGIN;
 SELECT SV_TECNICO.co_repuestosPorAgotarseSede('6060606060');
 FETCH ALL IN "co_porAgotarse";
 COMMIT;
-
--- Caso 13: Consulta el valor total de la compra C000000012 de su sede: 360000
-SELECT SV_TECNICO.co_valorTotalCompra('6060606060', 'C000000012');
 
 
 
@@ -2653,42 +2620,13 @@ SELECT SV_TECNICO.up_detalle_servicio('2020202020', 'OS26-00000001', 3, 'F', 1);
 SELECT * FROM SERVICIOS;
 
 -- Caso 3: No puede usar el componente directamente
-SELECT SV_SERVICIOS.de('3030303030', 'OS26-00000001');
-
--- Caso 4: La gerente de S02 no puede cancelar una orden de S01
-SELECT SV_GERENTE.up_servicio('8080808080', 'OS26-00000001', 'C');
-
-
--- Cuenta: Tecnico
-
--- Caso 5: No puede usar los servicios del gerente
-SELECT SV_GERENTE.ad_servicio('3030303030', 'ABC123');
-
--- Caso 6: No puede registrar trabajo en un detalle asignado a otro tecnico
-SELECT SV_TECNICO.up_detalle_servicio('5050505050', 'OS26-00000001', 3, 'F', 1);
-
--- Cuenta: Gerente
-
--- Caso 7: No puede saltarse los servicios y leer la tabla directamente
-SELECT * FROM COMPRAS;
-
--- Caso 8: No puede usar el componente directamente
 SELECT SV_COMPRAS.de('3030303030', 'C000000010');
 
--- Caso 9: La gerente de S02 no puede modificar una compra de S01
-SELECT SV_GERENTE.up_detalle_compra('8080808080', 'C000000010', 'R001', 1, NULL);
-
--- Caso 10: La gerente de S02 no puede eliminar una compra de S01
-SELECT SV_GERENTE.de_compra('8080808080', 'C000000010');
-
 
 -- Cuenta: Tecnico
 
--- Caso 11: El tecnico no registra compras: no puede usar los servicios del gerente
+-- Caso 4: No puede usar los servicios del gerente (el tecnico no registra compras)
 SELECT SV_GERENTE.ad_compra('3030303030', '900123456');
-
--- Caso 12: No puede consultar compras de otra sede (6060606060 es de S02, C000000010 de S01)
-SELECT SV_TECNICO.co_valorTotalCompra('6060606060', 'C000000010');
 
 
 */
@@ -2762,16 +2700,16 @@ SELECT SV_GERENTE.co_repuestosPorAgotarseSede('8080808080');
 FETCH ALL IN "co_porAgotarse";
 CLOSE "co_porAgotarse";
 SELECT SV_GERENTE.ad_compra('8080808080', '900654321');
-SELECT * FROM COMPRAS WHERE numero = 'C000000013';
+SELECT * FROM COMPRAS WHERE numero = 'C000000012';
 
 -- Paso 2 : Laura agrega 12 pastillas de freno (R002) sin indicar precio
 --      y se toma el precio de referencia del proveedor (45000). Luego intenta agregar filtros
 --      de aceite (R001) sin precio. "Frenos Ya" no tiene precio de referencia para ese repuesto
 --      y el sistema le pide indicarlo.
-SELECT SV_GERENTE.ad_detalle_compra('8080808080', 'C000000013', 'R002', 12, NULL);
+SELECT SV_GERENTE.ad_detalle_compra('8080808080', 'C000000012', 'R002', 12, NULL);
 DO $$
 BEGIN
-    PERFORM SV_GERENTE.ad_detalle_compra('8080808080', 'C000000013', 'R001', 5, NULL);
+    PERFORM SV_GERENTE.ad_detalle_compra('8080808080', 'C000000012', 'R001', 5, NULL);
     RAISE NOTICE 'FALLA LA PRUEBA: se agrego un detalle sin precio';
 EXCEPTION WHEN OTHERS THEN
     RAISE NOTICE 'Rechazado como se esperaba: %', SQLERRM;
@@ -2782,19 +2720,19 @@ $$;
 --      lo rechaza. Luego la corrige a 10 unidades a 44000 cada una.
 DO $$
 BEGIN
-    PERFORM SV_GERENTE.up_detalle_compra('8080808080', 'C000000013', 'R002', 0, NULL);
+    PERFORM SV_GERENTE.up_detalle_compra('8080808080', 'C000000012', 'R002', 0, NULL);
     RAISE NOTICE 'FALLA LA PRUEBA: se acepto una cantidad de cero';
 EXCEPTION WHEN OTHERS THEN
     RAISE NOTICE 'Rechazado como se esperaba: %', SQLERRM;
 END;
 $$;
-SELECT SV_GERENTE.up_detalle_compra('8080808080', 'C000000013', 'R002', 10, 44000);
+SELECT SV_GERENTE.up_detalle_compra('8080808080', 'C000000012', 'R002', 10, 44000);
 
 -- Paso 4 : Jorge, tecnico de la Sede Sur, intenta subir la cantidad de la compra
 --      y el sistema lo rechaza: las compras solo las modifica la gerente.
 DO $$
 BEGIN
-    PERFORM SV_COMPRAS.up_detalle('6060606060', 'C000000013', 'R002', 50, NULL);
+    PERFORM SV_COMPRAS.up_detalle('6060606060', 'C000000012', 'R002', 50, NULL);
     RAISE NOTICE 'FALLA LA PRUEBA: un tecnico modifico una compra';
 EXCEPTION WHEN OTHERS THEN
     RAISE NOTICE 'Rechazado como se esperaba: %', SQLERRM;
@@ -2807,8 +2745,8 @@ SELECT  c.numero, c.fecha, c.sede, c.proveedor,
         dc.repuesto, dc.cantidad, dc.precio_unidad
 FROM COMPRAS c
 JOIN DETALLE_COMPRAS dc ON dc.compra = c.numero
-WHERE c.numero = 'C000000013';
-SELECT SV_GERENTE.co_valorTotalCompra('8080808080', 'C000000013');
+WHERE c.numero = 'C000000012';
+SELECT SV_GERENTE.co_valorTotalCompra('8080808080', 'C000000012');
 SELECT SV_GERENTE.co_repuestosPorAgotarseSede('8080808080');
 FETCH ALL IN "co_porAgotarse";
 
@@ -2885,15 +2823,15 @@ BEGIN;
 -- Paso 1 : Luis abre la orden para el vehiculo DEF456.
 --      Queda con el numero consecutivo, la fecha de hoy, en estado E y en la sede de Luis (S01).
 SELECT SV_TECNICO.ad_servicio('2020202020', 'DEF456');
-SELECT * FROM SERVICIOS WHERE numero = 'OS26-00000026';
+SELECT * FROM SERVICIOS WHERE numero = 'OS26-00000024';
 
 -- Paso 2 : Luis agrega el cambio de aceite (CS01) y se lo asigna a si mismo.
 --      Queda como item 1, en estado E y con el precio local de S01 (160000).
 --      Luego intenta agregar la alineacion (CS03), que S01 no tiene habilitada, y el sistema lo rechaza.
-SELECT SV_TECNICO.ad_detalle_servicio('2020202020', 'OS26-00000026', 'CS01', '2020202020');
+SELECT SV_TECNICO.ad_detalle_servicio('2020202020', 'OS26-00000024', 'CS01', '2020202020');
 DO $$
 BEGIN
-    PERFORM SV_TECNICO.ad_detalle_servicio('2020202020', 'OS26-00000026', 'CS03', '2020202020');
+    PERFORM SV_TECNICO.ad_detalle_servicio('2020202020', 'OS26-00000024', 'CS03', '2020202020');
     RAISE NOTICE 'FALLA LA PRUEBA: se agrego un servicio que la sede no tiene habilitado';
 EXCEPTION WHEN OTHERS THEN
     RAISE NOTICE 'Rechazado como se esperaba: %', SQLERRM;
@@ -2904,7 +2842,7 @@ $$;
 --      que trabaja en la Sede Sur, y el sistema lo rechaza.
 DO $$
 BEGIN
-    PERFORM SV_TECNICO.ad_detalle_servicio('2020202020', 'OS26-00000026', 'CS02', '6060606060');
+    PERFORM SV_TECNICO.ad_detalle_servicio('2020202020', 'OS26-00000024', 'CS02', '6060606060');
     RAISE NOTICE 'FALLA LA PRUEBA: se asigno un trabajo a un tecnico de otra sede';
 EXCEPTION WHEN OTHERS THEN
     RAISE NOTICE 'Rechazado como se esperaba: %', SQLERRM;
@@ -2915,7 +2853,7 @@ $$;
 --      Luis intenta cerrar la orden con el cambio de aceite aun en proceso y el sistema lo rechaza.
 DO $$
 BEGIN
-    PERFORM SV_TECNICO.up_detalle_servicio('5050505050', 'OS26-00000026', 1, 'F', 2);
+    PERFORM SV_TECNICO.up_detalle_servicio('5050505050', 'OS26-00000024', 1, 'F', 2);
     RAISE NOTICE 'FALLA LA PRUEBA: una tecnica registro trabajo en un detalle que no es suyo';
 EXCEPTION WHEN OTHERS THEN
     RAISE NOTICE 'Rechazado como se esperaba: %', SQLERRM;
@@ -2923,7 +2861,7 @@ END;
 $$;
 DO $$
 BEGIN
-    PERFORM SV_TECNICO.up_servicio('2020202020', 'OS26-00000026', 'F');
+    PERFORM SV_TECNICO.up_servicio('2020202020', 'OS26-00000024', 'F');
     RAISE NOTICE 'FALLA LA PRUEBA: se finalizo una orden con detalles en proceso';
 EXCEPTION WHEN OTHERS THEN
     RAISE NOTICE 'Rechazado como se esperaba: %', SQLERRM;
@@ -2934,17 +2872,17 @@ $$;
 --      La fecha de fin se asigna automaticamente y el valor total a cobrar es 160000.
 --      Se verifica que la orden y su detalle quedaron en F, con fecha de fin, tecnico, horas,
 --      valor y diagnostico.
-SELECT SV_TECNICO.up_diagnostico_servicio('2020202020', 'OS26-00000026', 1,
+SELECT SV_TECNICO.up_diagnostico_servicio('2020202020', 'OS26-00000024', 1,
     '{"sintomas": ["testigo de cambio de aceite encendido"], "hallazgos": "Aceite degradado y filtro saturado", "recomendaciones": ["proximo cambio en 5000 km"]}');
-SELECT SV_TECNICO.up_detalle_servicio('2020202020', 'OS26-00000026', 1, 'F', 1.5);
-SELECT SV_TECNICO.up_servicio('2020202020', 'OS26-00000026', 'F');
-SELECT SV_TECNICO.co_valorTotalServicio('2020202020', 'OS26-00000026');
+SELECT SV_TECNICO.up_detalle_servicio('2020202020', 'OS26-00000024', 1, 'F', 1.5);
+SELECT SV_TECNICO.up_servicio('2020202020', 'OS26-00000024', 'F');
+SELECT SV_TECNICO.co_valorTotalServicio('2020202020', 'OS26-00000024');
 SELECT  s.numero, s.estado AS estadoOrden, s.fecha_fin AS finOrden,
         d.item, d.estado AS estadoDetalle, d.fecha_fin AS finDetalle,
         d.tecnico, d.horas_trabajadas, d.valor_cobrado,
         d.diagnostico ->> 'hallazgos' AS hallazgos
 FROM SERVICIOS s
 JOIN DETALLE_ORDENES d ON d.servicio = s.numero
-WHERE s.numero = 'OS26-00000026';
+WHERE s.numero = 'OS26-00000024';
 
 ROLLBACK;
